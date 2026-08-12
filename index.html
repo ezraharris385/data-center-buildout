@@ -37,6 +37,8 @@
     <button class="tab" data-scene="cloud">Cloud</button>
     <button class="tab" data-scene="colocation">Colocation</button>
     <button class="tab" data-scene="enterprise">Enterprise</button>
+    <button class="tab tab-alt" data-scene="database">Database</button>
+    <button class="tab tab-alt" data-scene="custom">Custom</button>
   </nav>
   <div class="top-actions">
     <button class="icon-btn" id="btnHelp" title="About / controls">?</button>
@@ -48,6 +50,18 @@
   <div class="panel-section">
     <div class="panel-head">SCENE</div>
     <div class="scene-blurb" id="sceneBlurb"></div>
+  </div>
+
+  <div id="builderPanel" class="hidden"></div>
+
+  <div class="panel-section" id="learnSection">
+    <div class="panel-head">EDUCATION</div>
+    <div class="btn-grid">
+      <button id="btnFlow">▶ Follow the flow</button>
+      <button id="btnGuide">☰ Equipment guide</button>
+    </div>
+    <div class="learn-hint">Walk the facility in the order energy moves through it, or open the
+    full explainer of every system and cycle.</div>
   </div>
 
   <div class="panel-section">
@@ -123,11 +137,39 @@
     </div>
   </div>
 
+  <div class="panel-section hidden" id="agentSection">
+    <div id="agentPanel"></div>
+  </div>
+
   <div class="panel-section" id="inspectorSection">
     <div class="panel-head">COMPONENT INSPECTOR</div>
     <div id="inspector" class="inspector-empty">Click any piece of equipment to inspect it. Hover to highlight.</div>
   </div>
 </aside>
+
+<!-- Database view -->
+<div id="dbView" class="hidden"></div>
+
+<!-- Education: flow walkthrough card -->
+<div id="flowCard" class="hidden">
+  <div class="flow-title" id="flowTitle"></div>
+  <div class="flow-body" id="flowBody"></div>
+  <div class="flow-nav">
+    <button id="flowPrev">← Back</button>
+    <span id="flowPos"></span>
+    <button id="flowNext">Next →</button>
+    <button id="flowExit" class="flow-exit">✕ Exit</button>
+  </div>
+</div>
+
+<!-- Education: equipment guide overlay -->
+<div id="guideOverlay" class="hidden">
+  <div class="guide-card">
+    <button class="modal-close" id="guideClose">✕</button>
+    <h2>Equipment &amp; Cycles</h2>
+    <div id="guideContent"></div>
+  </div>
+</div>
 
 <!-- bottom hint -->
 <div id="hintbar">
