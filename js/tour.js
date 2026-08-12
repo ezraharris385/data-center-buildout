@@ -31,7 +31,8 @@ export class Choreographer {
     this.controls.target.copy(this._keys[0].target);
     this.controls.update();
     this.camera.updateMatrixWorld();
-    if (this._keys[0].caption) this.onCaption?.(this._keys[0].caption, this._keys[0].dur);
+    // key 0's caption displays while traveling toward key 1
+    if (this._keys[0].caption) this.onCaption?.(this._keys[0].caption, this._keys[1]?.dur ?? 4);
     this.segStartPos = this._keys[0].pos.clone();
     this.segStartTgt = this._keys[0].target.clone();
     this.seg = 1;
