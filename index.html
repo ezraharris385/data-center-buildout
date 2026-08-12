@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Center Buildout — 3D Operations Studio</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏭</text></svg>">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="loading">
+  <div class="load-box">
+    <div class="load-title">DATA CENTER BUILDOUT</div>
+    <div class="load-sub">3D Operations Studio</div>
+    <div class="load-bar"><div class="load-fill" id="loadFill"></div></div>
+    <div class="load-msg" id="loadMsg">Loading component catalog…</div>
+  </div>
+</div>
+
+<header id="topbar">
+  <div class="brand">
+    <span class="brand-mark">▣</span>
+    <span class="brand-name">DATA CENTER BUILDOUT</span>
+    <span class="brand-tag">3D Operations Studio</span>
+  </div>
+  <nav id="tabs">
+    <button class="tab active" data-scene="hyperscale">Hyperscale</button>
+    <button class="tab" data-scene="cloud">Cloud</button>
+    <button class="tab" data-scene="colocation">Colocation</button>
+    <button class="tab" data-scene="enterprise">Enterprise</button>
+  </nav>
+  <div class="top-actions">
+    <button class="icon-btn" id="btnHelp" title="About / controls">?</button>
+  </div>
+</header>
+
+<!-- LEFT: layers + systems + camera -->
+<aside id="leftPanel" class="panel">
+  <div class="panel-section">
+    <div class="panel-head">SCENE</div>
+    <div class="scene-blurb" id="sceneBlurb"></div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-head">CAMERA</div>
+    <div class="btn-grid" id="cameraBtns">
+      <button data-cam="overview">Overview</button>
+      <button data-cam="yard">Yard</button>
+      <button data-cam="gray">Gray Space</button>
+      <button data-cam="white">White Space</button>
+      <button data-cam="rack">Rack Level</button>
+      <button data-cam="aerial">Aerial</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-head">BUILDING</div>
+    <label class="toggle"><input type="checkbox" id="tglRoof"><span class="tswitch"></span>Roof &amp; walls</label>
+    <label class="toggle"><input type="checkbox" id="tglContain" checked><span class="tswitch"></span>Aisle containment</label>
+    <label class="toggle"><input type="checkbox" id="tglLabels" checked><span class="tswitch"></span>Zone labels</label>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-head">LIVE SYSTEMS</div>
+    <label class="toggle sys-power"><input type="checkbox" id="tglPower" checked><span class="tswitch"></span>Power flow</label>
+    <label class="toggle sys-cool"><input type="checkbox" id="tglCoolant" checked><span class="tswitch"></span>Coolant loops</label>
+    <label class="toggle sys-air"><input type="checkbox" id="tglAir" checked><span class="tswitch"></span>Airflow</label>
+    <label class="toggle sys-heat"><input type="checkbox" id="tglHeat" checked><span class="tswitch"></span>Heat plume</label>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-head">LEGEND</div>
+    <div class="legend">
+      <div><i style="background:#ffc233"></i>Power (utility)</div>
+      <div><i style="background:#ff5c39"></i>Power (backup)</div>
+      <div><i style="background:#39c2ff"></i>Coolant supply</div>
+      <div><i style="background:#ff8a5c"></i>Coolant return</div>
+      <div><i style="background:#7fd4ff"></i>Cold air</div>
+      <div><i style="background:#ff6a4a"></i>Hot air</div>
+    </div>
+  </div>
+</aside>
+
+<!-- RIGHT: operations + inspector -->
+<aside id="rightPanel" class="panel">
+  <div class="panel-section">
+    <div class="panel-head">OPERATIONS CONSOLE</div>
+
+    <div class="ops-row">
+      <div class="ops-label">IT load <span class="ops-val" id="valLoad">80%</span></div>
+      <input type="range" id="sldLoad" min="10" max="100" value="80">
+    </div>
+
+    <div class="ops-row">
+      <div class="ops-label">Outside air <span class="ops-val" id="valTemp">75°F</span></div>
+      <input type="range" id="sldTemp" min="-10" max="110" value="75">
+    </div>
+
+    <button id="btnUtility" class="danger-btn">
+      <span class="dot ok" id="utilDot"></span><span id="utilLabel">UTILITY ONLINE — click to fail grid</span>
+    </button>
+    <div class="failover-note" id="failNote"></div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-head">FACILITY TELEMETRY</div>
+    <div class="stats" id="stats">
+      <div class="stat"><div class="stat-k" id="stITLoad">—</div><div class="stat-l">IT load</div></div>
+      <div class="stat"><div class="stat-k" id="stTotal">—</div><div class="stat-l">Total facility</div></div>
+      <div class="stat"><div class="stat-k" id="stPUE">—</div><div class="stat-l">PUE</div></div>
+      <div class="stat"><div class="stat-k" id="stRacks">—</div><div class="stat-l">Racks</div></div>
+      <div class="stat"><div class="stat-k" id="stDensity">—</div><div class="stat-l">Avg kW / rack</div></div>
+      <div class="stat"><div class="stat-k" id="stSource">—</div><div class="stat-l">Power source</div></div>
+    </div>
+  </div>
+
+  <div class="panel-section" id="inspectorSection">
+    <div class="panel-head">COMPONENT INSPECTOR</div>
+    <div id="inspector" class="inspector-empty">Click any piece of equipment to inspect it. Hover to highlight.</div>
+  </div>
+</aside>
+
+<!-- bottom hint -->
+<div id="hintbar">
+  <span><b>Drag</b> orbit</span><span><b>Right-drag</b> pan</span><span><b>Scroll</b> zoom</span><span><b>Click</b> inspect equipment</span>
+</div>
+
+<!-- help modal -->
+<div id="helpModal" class="modal hidden">
+  <div class="modal-card">
+    <button class="modal-close" id="btnCloseHelp">✕</button>
+    <h2>Data Center Buildout</h2>
+    <p>An interactive 3D teaching studio for how data centers actually work — built to exact catalog
+    dimensions (millimeter-accurate, from real manufacturer datasheets).</p>
+    <h3>The four archetypes</h3>
+    <p><b>Hyperscale</b> — single-tenant AI factory. Liquid-cooled NVIDIA GB200 NVL72 racks at ~120 kW each,
+    row CDUs, massive gray-space UPS lineups, and a yard full of generators, chillers and thermal storage.</p>
+    <p><b>Cloud</b> — a cloud availability-zone hall. Mixed OCP ORv3 and EIA racks, air + liquid cooling,
+    modular UPS strings that scale with demand.</p>
+    <p><b>Colocation</b> — multi-tenant retail colo. Caged customer zones, mixed rack sizes, raised floor,
+    perimeter CRAH cooling, redundant utility feeds.</p>
+    <p><b>Enterprise</b> — the on-prem server room. A handful of racks, one UPS, one generator: where most
+    IT actually started.</p>
+    <h3>What to try</h3>
+    <p>• Kill the utility feed and watch the ATS transfer to generators.<br>
+    • Push IT load to 100% and watch the heat plumes and PUE respond.<br>
+    • Turn off the roof and read the airflow: cold aisle → servers → hot aisle → return.<br>
+    • Click a GB200 rack, a chiller, a UPS — every object carries its real spec sheet.</p>
+    <p class="fine">Dimensions from the component catalog (61 SKUs). 1 scene unit = 1 meter. PUE model is illustrative.</p>
+  </div>
+</div>
+
+<canvas id="scene3d"></canvas>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
