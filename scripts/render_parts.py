@@ -54,6 +54,8 @@ PARTS += [
     P('MEC-005','Fan deck','box', 0,2480,0, 12000,2100,70, mat='chiller'),
     P('MEC-005','EC fan array','fan', -5075,2600,0, dia=910, count=8, axis='x', spacing=1450,
       mat='fanBlade', spin=1, blades=7, notes='8x EC axial fans, ~910 mm impeller'),
+    P('MEC-005','Lower plenum panel A','box', 0,650,-1090, 11800,60,1100, mat='chiller'),
+    P('MEC-005','Lower plenum panel B','box', 0,650,1090, 11800,60,1100, mat='chiller'),
     P('MEC-005','Supply header','cylH', 0,600,1120, dia=168, ln=11200, mat='pipeSupply',
       notes='DN150 glycol supply header'),
     P('MEC-005','Return header','cylH', 0,950,1120, dia=168, ln=11200, mat='pipeReturn'),
@@ -77,6 +79,8 @@ PARTS += [
     P('MEC-001','Oil separator B','cyl', 3300,800,500, dia=420, ln=1300, mat='tank'),
     P('MEC-001','Evaporator shell','cylH', 1000,650,0, dia=900, ln=6500, mat='tank',
       notes='Flooded evaporator barrel under coils'),
+    P('MEC-001','Lower plenum panel A','box', -1800,600,-1080, 8300,60,950, mat='chiller'),
+    P('MEC-001','Lower plenum panel B','box', -1800,600,1080, 8300,60,950, mat='chiller'),
     P('MEC-001','CHW supply stub','cylH', -2200,650,1180, dia=219, ln=400, ry=90, mat='pipeSupply'),
     P('MEC-001','CHW return stub','cylH', -3000,650,1180, dia=219, ln=400, ry=90, mat='pipeReturn'),
 ]
@@ -249,6 +253,61 @@ PARTS += [
       spacing=932, mat='upsAccent', notes='6-frame lineup'),
     P('ELC-002','HMI','box', -2330,1560,518, 360,15,230, mat='screenDark'),
     P('ELC-002','Vent band','box', 0,170,500, 5500,15,200, mat='chillerCoil'),
+]
+
+
+# ============================================================ MEC-003
+# York YK centrifugal water-cooled chiller (~1500 ton). 4880 x 2240 x 2740.
+PARTS += [
+    P('MEC-003','Evaporator barrel','cylH', 0,850,300, dia=1450, ln=4500, mat='tank',
+      notes='Lower shell — chilled water side'),
+    P('MEC-003','Condenser barrel','cylH', 0,2000,-300, dia=1350, ln=4500, mat='tank',
+      notes='Upper shell — condenser water side'),
+    P('MEC-003','Waterbox A','cylH', -2400,850,300, dia=1520, ln=350, mat='gensetDark'),
+    P('MEC-003','Waterbox B','cylH', 2400,850,300, dia=1520, ln=350, mat='gensetDark'),
+    P('MEC-003','Compressor volute','cyl', 900,2700,0, dia=1100, ln=700, mat='chiller',
+      notes='Centrifugal compressor between shells'),
+    P('MEC-003','Drive motor','cylH', 2200,2650,0, dia=850, ln=1500, mat='chiller'),
+    P('MEC-003','Suction elbow','cyl', -200,2450,300, dia=700, ln=800, mat='tank'),
+    P('MEC-003','CHW nozzles','cyl', -1400,1900,900, dia=350, ln=700, count=2, axis='x',
+      spacing=2800, mat='pipeSupply', notes='Chilled water in/out'),
+    P('MEC-003','CDW nozzles','cyl', -1400,2950,-300, dia=350, ln=600, count=2, axis='x',
+      spacing=2800, mat='pipeReturn', notes='Condenser water in/out'),
+    P('MEC-003','Control panel','box', -2100,1500,-900, 800,300,1600, mat='pdu'),
+]
+
+# ============================================================ MEC-006
+# Bell & Gossett e-1510 base-mounted pump, 100 HP. 2030 x 910 x 1220.
+PARTS += [
+    P('MEC-006','Inertia base','box', 0,100,0, 2030,910,200, mat='gensetDark'),
+    P('MEC-006','Motor','cylH', -450,650,0, dia=550, ln=1000, mat='chiller'),
+    P('MEC-006','Coupling guard','cylH', 200,650,0, dia=300, ln=300, mat='genset'),
+    P('MEC-006','Volute casing','cyl', 600,550,0, dia=620, ln=550, mat='pipeSupply'),
+    P('MEC-006','Suction pipe','cylH', 950,550,0, dia=250, ln=650, mat='pipeSupply'),
+    P('MEC-006','Discharge pipe','cyl', 600,1050,0, dia=200, ln=500, mat='pipeReturn'),
+]
+
+# ============================================================ LCL-004
+# CoolIT AHx240 liquid-to-air sidecar. 600 x 1200 x 2265.
+PARTS += [
+    P('LCL-004','Cabinet','box', 0,1132,0, 600,1200,2265, mat='cdu'),
+    P('LCL-004','Front louver','box', 0,1100,608, 540,18,1900, mat='chillerCoil'),
+    P('LCL-004','Internal fan column','fan', 0,700,-350, dia=420, count=3, axis='y',
+      spacing=560, rx=90, mat='fanBlade', spin=1, blades=7,
+      notes='Vertical stack of fans pulling air through the HX'),
+    P('LCL-004','Coolant supply','cylH', -140,300,-660, dia=76, ln=280, ry=90, mat='pipeSupply'),
+    P('LCL-004','Coolant return','cylH', 140,300,-660, dia=76, ln=280, ry=90, mat='pipeReturn'),
+]
+
+# ============================================================ ACL-001
+# Vertiv Liebert CRV in-row cooler. 600 x 1100 x 1996.
+PARTS += [
+    P('ACL-001','Cabinet','box', 0,998,0, 600,1100,1996, mat='crah'),
+    P('ACL-001','Front discharge grille','box', 0,1000,558, 540,18,1700, mat='crahDark'),
+    P('ACL-001','Rear intake grille','box', 0,1000,-558, 540,18,1700, mat='crahDark'),
+    P('ACL-001','HMI','box', 0,1780,560, 220,12,140, mat='screenDark'),
+    P('ACL-001','CHW stubs','cylH', -120,250,-580, dia=60, ln=250, ry=90, count=2, axis='x',
+      spacing=240, mat='pipeSupply'),
 ]
 
 HEADER_NOTES = [

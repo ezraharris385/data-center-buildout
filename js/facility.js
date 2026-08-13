@@ -87,10 +87,17 @@ export function buildFacility(scene, cfg, flows) {
   const pairDepth = 2 * rackD + aisleShared;
   const pairs = Math.ceil(rowCount / 2);
 
-  const hallW = rowLen + (cfg.hallMarginX ?? 7) * 2;
-  const hallD = pairs * pairDepth + (pairs + 1) * aisleOuter + 4;
+  // fixed real-building mode (retrofits): cfg.building = { w, d } in meters overrides
+  // the derived envelope; gray space is carved out of the building depth.
   const grayD = cfg.grayD ?? 9;
+  const fixed = cfg.building ?? null;
+  const hallW = fixed ? fixed.w : rowLen + (cfg.hallMarginX ?? 7) * 2;
+  const hallD = fixed ? fixed.d - grayD : pairs * pairDepth + (pairs + 1) * aisleOuter + 4;
   const yardD = cfg.yardD ?? 22;
+
+  // interior obstructions (columns, offices) that rack placement must respect
+  const colBlockers = [];   // {x, z}
+  const officeRects = [];   // {x0, x1, z0, z1}
   const floorH = cfg.wallH ?? Math.max(rackH + 3, 6);
   const wallH = floorH * floors;
   const busH = rackH + 0.55;
@@ -182,6 +189,99 @@ export function buildFacility(scene, cfg, flows) {
   divider.position.set(0, (wallH - 0.5) / 2, 0);
   root.add(divider); layers.roof.push(divider);
 
+  /* ---------------- interior demising walls (split into N halls) ---------------- */
+  const dividerZs = [];
+  if ((cfg.halls ?? 1) > 1) {
+    const n = cfg.halls;
+    for (let i = 1; i < n; i++) {
+      const dz = (hallD / n) * i;
+      dividerZs.push(dz);
+      // full-height wall with two corridor openings at ±hallW/4
+      const opening = 3;
+      const segs = [
+        [-hallW / 2, -hallW / 4 - opening / 2],
+        [-hallW / 4 + opening / 2, hallW / 4 - opening / 2],
+        [hallW / 4 + opening / 2, hallW / 2],
+      ];
+      for (const [x0, x1] of segs) {
+        const w = x1 - x0;
+        if (w <= 0.1) continue;
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(w, wallH - 0.4, 0.35), mats.wall());
+        seg.position.set((x0 + x1) / 2, (wallH - 0.4) / 2, dz);
+        seg.castShadow = seg.receiveShadow = true;
+        root.add(seg);
+      }
+      // header over the openings
+      for (const ox of [-hallW / 4, hallW / 4]) {
+        const hdr = new THREE.Mesh(new THREE.BoxGeometry(opening, wallH - 0.4 - 3.2, 0.35), mats.wall());
+        hdr.position.set(ox, 3.2 + (wallH - 0.4 - 3.2) / 2, dz);
+        root.add(hdr);
+      }
+      const l = makeLabel(`HALL ${i + 1}`, { size: 30, color: '#5c7a94' });
+      l.position.set(0, wallH * 0.7, dz + 1.2);
+      root.add(l); layers.labels.push(l);
+    }
+  }
+
+  /* ---------------- structural column grid ---------------- */
+  if (cfg.columnGrid) {
+    const cg = cfg.columnGrid;
+    const colGeo = new THREE.BoxGeometry(0.4, wallH - 0.3, 0.4);
+    const colMat = mats.switchgear();
+    for (let x = -hallW / 2 + cg; x < hallW / 2 - 0.5; x += cg) {
+      for (let z = cg; z < hallD - 0.5; z += cg) {
+        const col = new THREE.Mesh(colGeo, colMat);
+        col.position.set(x, (wallH - 0.3) / 2, z);
+        col.castShadow = col.receiveShadow = true;
+        root.add(col);
+        colBlockers.push({ x, z });
+      }
+    }
+  }
+
+  /* ---------------- corner offices ---------------- */
+  if (cfg.officeCornerSF) {
+    const oside = Math.sqrt(cfg.officeCornerSF * 0.092903); // sf → m², square block
+    const oh = 3.2;
+    const spots = [
+      { x: -hallW / 2 + oside / 2 + 0.3, z: hallD - oside / 2 - 0.3 },
+      { x: hallW / 2 - oside / 2 - 0.3, z: hallD - oside / 2 - 0.3 },
+      { x: -hallW / 2 + oside / 2 + 0.3, z: -grayD + oside / 2 + 0.3 },
+      { x: hallW / 2 - oside / 2 - 0.3, z: -grayD + oside / 2 + 0.3 },
+    ];
+    for (const s of spots) {
+      const off = new THREE.Group();
+      const shellBox = new THREE.Mesh(new THREE.BoxGeometry(oside, oh, oside), mats.wall());
+      shellBox.position.y = oh / 2;
+      off.add(shellBox);
+      const glassBand = new THREE.Mesh(new THREE.BoxGeometry(oside + 0.04, 1.3, oside + 0.04), mats.wallGlass());
+      glassBand.position.y = 1.8;
+      off.add(glassBand);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(oside + 0.1, 0.12, oside + 0.1), mats.roof());
+      cap.position.y = oh + 0.06;
+      off.add(cap);
+      const warm = new THREE.PointLight(0xffdfa0, 12, oside * 2.2, 1.6);
+      warm.position.y = oh - 0.6;
+      off.add(warm);
+      off.position.set(s.x, 0, s.z);
+      root.add(off);
+      const l = makeLabel('OFFICE', { size: 20, color: '#d8c48a' });
+      l.position.set(s.x, oh + 1.0, s.z);
+      root.add(l); layers.labels.push(l);
+      officeRects.push({ x0: s.x - oside / 2 - 0.6, x1: s.x + oside / 2 + 0.6, z0: s.z - oside / 2 - 0.6, z1: s.z + oside / 2 + 0.6 });
+    }
+  }
+
+  function rackBlocked(x, zRow) {
+    for (const c of colBlockers) {
+      if (Math.abs(x - c.x) < 0.55 && Math.abs(zRow - c.z) < rackD / 2 + 0.5) return true;
+    }
+    for (const o of officeRects) {
+      if (x > o.x0 && x < o.x1 && zRow > o.z0 && zRow < o.z1) return true;
+    }
+    return false;
+  }
+
   /* ---------------- interior lighting ---------------- */
   for (let f = 0; f < floors; f++) {
     const lightY = f * floorH + floorH - 0.4;
@@ -212,11 +312,22 @@ export function buildFacility(scene, cfg, flows) {
   const rowZs = [];   // { z, facing, floor, yOff }
   const zStart = aisleOuter + rackD / 2 + 1.2;
 
+  let placedRacks = 0;
   for (let f = 0; f < floors; f++) {
     const yOff = f * floorH;
     let z = zStart;
 
     for (let p = 0; p < pairs; p++) {
+      // jump the pair past any demising wall it would straddle
+      let guard = 0;
+      while (guard++ < 4) {
+        const zEnd = z + pairDepth;
+        const hit = dividerZs.find(dz => z - rackD / 2 - 0.9 < dz && zEnd + 0.9 > dz);
+        if (hit === undefined) break;
+        z = hit + 0.9 + rackD / 2 + aisleOuter;
+      }
+      if (z + pairDepth > hallD - 1.5) break;   // out of building depth
+
       const zA = z;
       const zB = z + rackD + aisleShared;
       const aisleZ = (zA + zB) / 2;
@@ -225,11 +336,14 @@ export function buildFacility(scene, cfg, flows) {
         if (rowIdx >= rowCount) continue;
         rowZs.push({ z: zRow, facing, floor: f, yOff });
         for (let i = 0; i < racksPerRow; i++) {
+          const rx = -rowLen / 2 + rackW * (i + 0.5);
+          if (rackBlocked(rx, zRow)) continue;  // leave a gap at columns / offices
           const rack = protoRack.clone();
           rack.userData = { ...protoRack.userData };
-          rack.position.set(-rowLen / 2 + rackW * (i + 0.5), yOff, zRow);
+          rack.position.set(rx, yOff, zRow);
           if (facing < 0) rack.rotation.y = Math.PI;
           addPick(rack);
+          placedRacks++;
         }
         const busA = B.buildBusway('PDW-001', rowLen + 1.4, 'A');
         busA.position.set(0, yOff + busH, zRow - 0.12);
@@ -332,7 +446,7 @@ export function buildFacility(scene, cfg, flows) {
 
   /* ---------------- gray space lineup ---------------- */
   const grayItems = [];
-  let gx = -hallW / 2 + 2.5;
+  let gx = -hallW / 2 + (cfg.officeCornerSF ? Math.sqrt(cfg.officeCornerSF * 0.092903) + 1.5 : 2.5);
   for (const item of cfg.gray) {
     for (let i = 0; i < (item.count ?? 1); i++) {
       const obj = B.buildById(item.id, item.opts ?? {});
@@ -397,7 +511,8 @@ export function buildFacility(scene, cfg, flows) {
     addPick(group);
     flows.addFans(fans.map(fn => fn.userData.hub ? fn : { userData: { hub: fn } }));
     chillPositions.push(new THREE.Vector3(x, 1.2, zc));
-    flows.addHeat(new THREE.Vector3(x, dims(chId).h + 0.3, zc), { count: 28, spread: chLen * 0.3, rise: 2.5, size: 1.2, opacity: 0.07 });
+    // heat exhausts upward off the fan deck — tight column, tall rise (not a pool in the coils)
+    flows.addHeat(new THREE.Vector3(x, dims(chId).h + 0.7, zc), { count: 26, spread: chLen * 0.22, rise: 4.2, size: 0.9, opacity: 0.055 });
   }
 
   let towerPos = null;
@@ -572,11 +687,25 @@ export function buildFacility(scene, cfg, flows) {
 
   /* ---------------- stats ---------------- */
   const rackKw = cfg.rows.kwPerRack || kw(rackId) || 8;
-  const nRacks = rowCount * racksPerRow * floors;
+  const nRacks = placedRacks;
+  // white space: hall floor area net of in-hall offices, vs building gross
+  const officeInHall = officeRects.reduce((a, o) => {
+    const zi = Math.max(0, Math.min(o.z1, hallD) - Math.max(o.z0, 0));
+    return a + Math.max(0, (o.x1 - o.x0) - 1.2) * Math.max(0, zi - (zi ? 1.2 : 0));
+  }, 0);
+  // 0.72 fit-out factor: corridors, egress, MEP galleries, staging inside the halls
+  const wsArea = (hallW * hallD - officeInHall) * 0.72;
+  const grossArea = hallW * (hallD + grayD);
+  // theoretical rack capacity of the shell (aisle-inclusive pitch, 15% derate for columns/egress)
+  const capRacks = Math.floor((hallW - 4) / rackW) * Math.floor((hallD - 4) / ((pairDepth + aisleOuter) / 2)) * floors * 0.85;
   result.stats = {
     racks: nRacks,
     itKW: nRacks * rackKw,
     kwPerRack: rackKw,
+    gpus: nRacks * (cfg.rows.gpusPerRack ?? 0),
+    whiteSpacePct: Math.round(wsArea / grossArea * 100),
+    spaceCapRacks: Math.floor(capRacks),
+    grossSF: Math.round(grossArea / 0.092903),
     coolKW: nCh * (kw(chId) || 0),
     genKW: nGen * (kw(genId) || 0),
     genCount: nGen,

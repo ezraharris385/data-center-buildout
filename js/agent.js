@@ -5,7 +5,7 @@
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
 import { comp, kw } from './catalog.js';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS } from './custom.js';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
@@ -19,6 +19,45 @@ export function analyze(cfg, stats) {
   const itKW = stats.itKW;
   const pue = stats.basePUE;
   const totalKW = itKW * pue;
+  const site = cfg.siteOverrides ?? null;
+
+  /* ----- site mode: verify against the underwriting workbook ----- */
+  if (site) {
+    const util = site.utilityKW;
+    ok(`${SITE_77N.name}: ${SITE_77N.grossSF.toLocaleString()} SF shell, 3 halls, 50×50 ft bays, ` +
+       `${stats.whiteSpacePct}% white space (offices ${SITE_77N.officeSF.toLocaleString()} SF in 4 corners).`);
+    if (stats.gpus) ok(`${stats.racks.toLocaleString()} racks placed → ${stats.gpus.toLocaleString()} GPUs at ${stats.kwPerRack} kW/rack.`);
+
+    // PUE verification: design 1.25 vs cooling-implied
+    for (const [label, p] of [['Liquid (DLC)', 1.15], ['Design (workbook)', site.designPUE], ['Air-cooled', 1.32]]) {
+      const need = itKW * p;
+      const pass = need <= util;
+      (pass ? ok : bad)(`PUE ${p} → ${fmt(need)} utility draw vs ${fmt(util)} available — ${pass ? `fits (${fmt(util - need)} headroom)` : `EXCEEDS feed by ${fmt(need - util)}`}.`);
+    }
+    if (itKW * pue > util) bad(`This build at PUE ${pue} needs ${fmt(itKW * pue)} — over the ${fmt(util)} interconnect. Shed racks or improve PUE.`);
+    else ok(`This build: ${fmt(itKW)} IT × PUE ${pue} = ${fmt(itKW * pue)} — inside the ${fmt(util)} feed.`);
+
+    // power chain from the workbook budget
+    if (site.upsKW < itKW) bad(`UPS budget ${fmt(site.upsKW)} < IT load ${fmt(itKW)}.`);
+    else ok(`UPS ${fmt(site.upsKW)} vs ${fmt(itKW)} IT — per workbook budget.`);
+    if (site.genKW < itKW * pue) warn(`Generators ${fmt(site.genKW)} vs ${fmt(itKW * pue)} total — check N+1 at this PUE.`);
+    else ok(`Generators ${fmt(site.genKW)} (N+1 per budget) cover ${fmt(itKW * pue)} total facility load.`);
+
+    // AMD max-fit: the 50 MW question
+    const amd = CHIP_OPTIONS.filter(c => c.key.startsWith('mi'));
+    for (const c of amd) {
+      const racksAtSite = Math.floor(itKW / c.kwRack);
+      const racks50 = Math.floor(50000 / c.kwRack);
+      const util50 = 50000 * (c.cooling === 'liquid' ? 1.15 : 1.32);
+      const spaceOK = racks50 <= stats.spaceCapRacks;
+      warn(`${c.label}: ${racksAtSite.toLocaleString()} racks (${(racksAtSite * c.gpusPerRack).toLocaleString()} GPUs) at today's ${fmt(itKW)} IT. ` +
+           `At 50 MW IT: ${racks50.toLocaleString()} racks (${(racks50 * c.gpusPerRack).toLocaleString()} GPUs) — ` +
+           `space ${spaceOK ? 'fits' : `EXCEEDS shell (~${stats.spaceCapRacks.toLocaleString()} rack cap)`}; ` +
+           `needs ~${fmt(util50)} utility (${(util50 / 1000 - SITE_77N.utilityMW).toFixed(1)} MW above today's feed).`);
+    }
+    const score2 = f.some(x => x.level === 'bad') ? 'BLOCKED' : 'SOUND';
+    return { findings: f, score: score2, itKW, totalKW, pue };
+  }
 
   // density
   const kwRack = stats.kwPerRack;

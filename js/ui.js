@@ -51,18 +51,20 @@ export function setUtilityUI(on, note, noteClass = '') {
   fn.className = `failover-note ${noteClass}`;
 }
 
-export function updateTelemetry({ itKW, totalKW, pue, racks, kwPerRack, source }) {
+export function updateTelemetry({ itKW, totalKW, pue, racks, kwPerRack, source, gpus, wsPct }) {
   const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(1)} MW` : `${Math.round(v)} kW`;
   $('stITLoad').textContent = fmt(itKW);
   $('stTotal').textContent = fmt(totalKW);
   const p = $('stPUE');
   p.textContent = pue.toFixed(2);
   p.className = 'stat-k' + (pue > 1.6 ? ' bad' : pue > 1.3 ? ' warn' : '');
-  $('stRacks').textContent = racks;
+  $('stRacks').textContent = racks.toLocaleString?.() ?? racks;
   $('stDensity').textContent = kwPerRack.toFixed(1);
   const s = $('stSource');
   s.textContent = source;
   s.className = 'stat-k' + (source === 'UTILITY' ? '' : source === 'BATTERY' ? ' bad' : ' warn');
+  $('stGpus').textContent = gpus ? gpus.toLocaleString() : '—';
+  $('stWS').textContent = wsPct ? `${wsPct}%` : '—';
 }
 
 export function showInspector(componentId, extra = {}) {

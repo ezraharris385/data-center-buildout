@@ -305,6 +305,8 @@ function updateTelemetry() {
     racks: s.racks,
     kwPerRack: s.kwPerRack * state.load,
     source: state.source,
+    gpus: s.gpus,
+    wsPct: s.whiteSpacePct,
   });
 }
 

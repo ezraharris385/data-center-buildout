@@ -4,6 +4,37 @@
 import * as B from './builders.js';
 import { comp, kw } from './catalog.js';
 
+/* ---------------- compute platforms (chip dropdown) ----------------
+   Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
+   closest catalog rack for true-dimension rendering. Power figures are
+   vendor-published rack/system numbers (recall-grade). */
+export const CHIP_OPTIONS = [
+  { key: 'gb200',  label: 'GB200 class (NVL72)',        gpusPerRack: 72, kwRack: 120, cooling: 'liquid', rackId: 'RCK-004', builder: () => B.buildNVL72('RCK-004'), year: 2025 },
+  { key: 'vr200',  label: 'Vera Rubin (VR200 NVL144)',  gpusPerRack: 72, kwRack: 132, cooling: 'liquid', rackId: 'RCK-005', builder: () => B.buildNVL72('RCK-005'), year: 2027, note: '72 Rubin packages / 144 dies, Oberon-class rack' },
+  { key: 'gb300',  label: 'Blackwell Ultra (GB300 NVL72)', gpusPerRack: 72, kwRack: 135, cooling: 'liquid', rackId: 'RCK-005', builder: () => B.buildNVL72('RCK-005'), year: 2026 },
+  { key: 'b200',   label: 'Blackwell (GB200/B200 HGX)',  gpusPerRack: 32, kwRack: 58,  cooling: 'liquid', rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2025, note: '4× HGX B200 8-GPU nodes per rack, DLC' },
+  { key: 'h200',   label: 'Hopper H200 (HGX)',           gpusPerRack: 32, kwRack: 44,  cooling: 'air',    rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2024, note: '4× HGX H200 nodes, air/RDHx' },
+  { key: 'h100',   label: 'Hopper H100 SXM (HGX)',       gpusPerRack: 32, kwRack: 41,  cooling: 'air',    rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2023, note: '4× HGX H100 nodes' },
+  { key: 'mi450x', label: 'Instinct MI450X (Helios)',    gpusPerRack: 72, kwRack: 140, cooling: 'liquid', rackId: 'RCK-004', builder: () => B.buildNVL72('RCK-004'), year: 2026, note: 'AMD rack-scale, 72 GPU, DLC' },
+  { key: 'mi355x', label: 'Instinct MI355X (2025)',      gpusPerRack: 32, kwRack: 62,  cooling: 'liquid', rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2025, note: '4× UBB 8-GPU, 1.4 kW/GPU, DLC' },
+  { key: 'mi325x', label: 'Instinct MI325X (2024)',      gpusPerRack: 32, kwRack: 46,  cooling: 'air',    rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2024, note: '4× UBB, 1 kW/GPU' },
+  { key: 'mi300x', label: 'Instinct MI300X (2024)',      gpusPerRack: 32, kwRack: 38,  cooling: 'air',    rackId: 'RCK-002', builder: () => B.buildRackEnclosure('RCK-002', { fillRU: 0.85 }), year: 2024, note: '4× UBB, 750 W/GPU' },
+];
+
+/* ---------------- 77 N Ave & Niles — 30 MW industrial retrofit ----------------
+   From "30MW Data Center Retrofit-Industrial.xlsm" Assumptions:
+   135,650 SF shell (modeled 500 ft × 271 ft), 32 ft clear, site 8.2 ac,
+   utility 10→30 MW, design PUE 1.25, critical IT 24 MW, office 5,160 SF,
+   generators N+1 36 MW, UPS 30 MW. Layout directives: demising wall every 1/3,
+   office in each corner, 50×50 ft column bays. */
+export const SITE_77N = {
+  name: '77 N Ave & Niles',
+  buildingW_ft: 271, buildingD_ft: 500, clearH_ft: 32,
+  grossSF: 135650, officeSF: 5160,
+  utilityMW: 30, criticalITMW: 24, designPUE: 1.25,
+  genMW: 36, upsMW: 30, halls: 3, columnFt: 50,
+};
+
 export const RACK_OPTIONS = [
   { id: 'RCK-004', label: 'NVIDIA GB200 NVL72 · 120 kW · liquid', cooling: 'liquid', kw: 120, builder: () => B.buildNVL72('RCK-004') },
   { id: 'RCK-005', label: 'NVIDIA GB300 NVL72 · 135 kW · liquid', cooling: 'liquid', kw: 135, builder: () => B.buildNVL72('RCK-005') },
@@ -34,6 +65,8 @@ export const HEATREJ_OPTIONS = [
 
 // current custom state (defaults: a mid-size AI build)
 export const custom = {
+  site: 'free',                       // 'free' or '77n' (locked to the retrofit shell)
+  chip: 'gb200',                      // active platform when site != free
   rack: 'RCK-004', rows: 4, racksPerRow: 8, kwPerRack: null, // null = rack default
   floors: 1, wallH: 6, hallMarginX: 7, shell: 'solid',
   cooling: 'auto',                    // auto = follow rack type
@@ -44,7 +77,71 @@ export const custom = {
   containment: true, busB: true, trays: true, pdus: true, tes: false, fuel: 1, tower: false,
 };
 
+const FT = 0.3048;
+
+// one buildout version per chip, derived from the site's power budget
+export function siteVersionConfig(chipKey) {
+  const chip = CHIP_OPTIONS.find(c => c.key === chipKey) ?? CHIP_OPTIONS[0];
+  const s = SITE_77N;
+  const itKW = s.criticalITMW * 1000;
+  const racksTarget = Math.floor(itKW / chip.kwRack);
+  const racksPerRow = 22;
+  const rows = Math.max(2, Math.floor(racksTarget / racksPerRow)); // never exceed the power budget
+  const pue = chip.cooling === 'liquid' ? 1.15 : 1.32;   // verified against 1.25 design in analyst
+  const liquid = chip.cooling === 'liquid';
+  const gpus = racksTarget * chip.gpusPerRack;
+
+  return {
+    title: `${s.name} — ${chip.label}`,
+    blurb: `<b>${s.name} · ${chip.label}.</b> ${s.grossSF.toLocaleString()} SF industrial retrofit,
+      3 halls, 50×50 ft bays, corner offices. ${s.utilityMW} MW utility / ${s.criticalITMW} MW critical IT
+      → <b>${racksTarget.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b> at ${chip.kwRack} kW/rack
+      (${chip.cooling}). Est. PUE ${pue} vs ${s.designPUE} design. Run the analyst to verify the power
+      chain and see AMD max-fit at 50 MW.`,
+    podName: 'ROW',
+    cooling: chip.cooling,
+    basePUE: pue,
+    rows: {
+      count: rows, racksPerRow, rackId: chip.rackId,
+      kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
+    },
+    floors: 1,
+    wallH: s.clearH_ft * FT * 0.55,          // hook height under 32 ft clear
+    shell: 'solid',
+    building: { w: s.buildingW_ft * FT, d: s.buildingD_ft * FT },
+    halls: s.halls,
+    columnGrid: s.columnFt * FT,
+    officeCornerSF: s.officeSF / 4,
+    grayD: 10,
+    yardD: 26,
+    crahCount: liquid ? 0 : 10,
+    include: { busB: true, trays: true, pdus: true, crah: !liquid, containment: true },
+    gray: [
+      { id: 'ELC-007', count: 1, opts: { sections: 3 } },
+      { id: 'ELC-001', count: 3 },
+      { id: 'ELC-005', count: 5 },
+      { id: 'ELC-009', count: 1 },
+      { id: 'ELC-010', count: 1 },
+      { id: 'ELC-006', count: 1, opts: { sections: 3 } },
+    ],
+    yard: {
+      transformers: 2,
+      gensets: { id: 'BKP-003', count: 12 },              // 36 MW N+1 per budget
+      chillers: { id: liquid ? 'MEC-005' : 'MEC-001', count: 8 },
+      tower: false, tes: false, fuel: 2,
+    },
+    siteOverrides: {                                       // analyst uses budget MW, not visual counts
+      upsKW: s.upsMW * 1000, genKW: s.genMW * 1000,
+      utilityKW: s.utilityMW * 1000, designPUE: s.designPUE,
+      tfKW: s.utilityMW * 1000,
+    },
+    tourRackLine: `${chip.label} racks`,
+    chip,
+  };
+}
+
 export function customConfig() {
+  if (custom.site === '77n') return siteVersionConfig(custom.chip);
   const rack = RACK_OPTIONS.find(r => r.id === custom.rack);
   const cooling = custom.cooling === 'auto' ? rack.cooling : custom.cooling;
   const kwRack = custom.kwPerRack ?? rack.kw;
@@ -98,6 +195,19 @@ export function initBuilder(onChange) {
   const tgl = (id, label, on) => `<label class="toggle"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span class="tswitch"></span>${label}</label>`;
 
   el.innerHTML = `
+    <div class="panel-section">
+      <div class="panel-head">SITE VERSIONS</div>
+      <div class="bld-label">Project</div>
+      <select id="bldSite">
+        <option value="free" ${custom.site === 'free' ? 'selected' : ''}>Freeform sandbox</option>
+        <option value="77n" ${custom.site === '77n' ? 'selected' : ''}>77 N Ave &amp; Niles — 30 MW retrofit</option>
+      </select>
+      <div class="bld-label">Compute platform</div>
+      <select id="bldChip">${CHIP_OPTIONS.map(c =>
+        `<option value="${c.key}" ${c.key === custom.chip ? 'selected' : ''}>${c.label}</option>`).join('')}</select>
+      <div class="learn-hint">Pick the site, then flip through chip platforms — each is a full
+      buildout version sized to the 24 MW critical IT budget. Freeform unlocks the manual controls below.</div>
+    </div>
     <div class="panel-section">
       <div class="panel-head">IT BUILD</div>
       <div class="bld-label">Rack platform</div>
@@ -161,6 +271,7 @@ export function initBuilder(onChange) {
       change();
     });
   };
+  bind('bldSite', 'site'); bind('bldChip', 'chip');
   bind('bldRack', 'rack'); bind('bldRows', 'rows', { num: true }); bind('bldRPR', 'racksPerRow', { num: true });
   bind('bldFloors', 'floors', { num: true }); bind('bldWallH', 'wallH', { num: true }); bind('bldMargin', 'hallMarginX', { num: true });
   bind('bldShell', 'shell');
