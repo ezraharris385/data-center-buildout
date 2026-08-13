@@ -121,6 +121,7 @@ function build3D(cfg) {
   flows.setUtility(true);
   flows.setLoad(state.load);
   if (cfg.shell === 'open') { toggles.roof = false; document.getElementById('tglRoof').checked = false; }
+  else if (cfg.building) { toggles.roof = true; document.getElementById('tglRoof').checked = true; } // real buildings arrive with their shell on
   applyToggles();
   UI.setBlurb(cfg.blurb);
 
@@ -287,10 +288,16 @@ function selectAt(x, y) {
 
 /* ---------------- operations model ---------------- */
 function computePUE() {
+  // cooling-technology-specific response: DLC plants barely feel weather (dry-cooler
+  // approach temp); air plants swing hard and benefit more from economizer hours.
   const base = state.cfg?.basePUE ?? 1.4;
+  const liquid = state.cfg?.cooling === 'liquid';
   const temp = state.tempF;
-  let pue = base + Math.max(0, temp - 65) * 0.005 - Math.max(0, 55 - temp) * 0.002;
-  pue += (1 - state.load) * 0.18;
+  const hotSlope = liquid ? 0.0028 : 0.0062;
+  const econSlope = liquid ? 0.0010 : 0.0035;
+  const partLoad = liquid ? 0.10 : 0.22;   // fixed losses dominate more in air plants
+  let pue = base + Math.max(0, temp - 65) * hotSlope - Math.max(0, 55 - temp) * econSlope;
+  pue += (1 - state.load) * partLoad;
   if (state.source === 'GENERATOR') pue += 0.05;
   return Math.max(1.03, pue);
 }
@@ -315,7 +322,12 @@ function failUtility() {
   state.source = 'BATTERY';
   for (const f of flows.power) f.setEnabled(false);
   flows._utilityOn = false;
-  UI.setUtilityUI(false, '⚡ Grid lost. UPS carrying full load on batteries…', 'alert');
+  // ride-through is a function of THIS build: cabinets × 250 kWh vs live IT draw
+  const battCabs = state.cfg?.siteOverrides?.battCabinets
+    ?? state.cfg?.gray?.find(g => g.id === 'ELC-005')?.count ?? 0;
+  const itNow = Math.max(1, (facility?.stats.itKW ?? 1000) * state.load);
+  const rideMin = battCabs * 250 * 60 / itNow;
+  UI.setUtilityUI(false, `⚡ Grid lost. UPS on batteries — ~${rideMin.toFixed(1)} min ride-through at current ${(itNow / 1000).toFixed(1)} MW load…`, 'alert');
   updateTelemetry();
   state.failTimers.push(setTimeout(() => {
     UI.setUtilityUI(false, '🔧 Engine start signal → gensets cranking…', 'gen');

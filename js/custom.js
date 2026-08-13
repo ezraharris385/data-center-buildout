@@ -67,6 +67,7 @@ export const HEATREJ_OPTIONS = [
 export const custom = {
   site: 'free',                       // 'free' or '77n' (locked to the retrofit shell)
   chip: 'gb200',                      // active platform when site != free
+  siteW_ft: 271, siteD_ft: 500,       // 77N footprint — ASSUMED from 135,650 SF gross; edit to match survey
   rack: 'RCK-004', rows: 4, racksPerRow: 8, kwPerRack: null, // null = rack default
   floors: 1, wallH: 6, hallMarginX: 7, shell: 'solid',
   cooling: 'auto',                    // auto = follow rack type
@@ -79,25 +80,39 @@ export const custom = {
 
 const FT = 0.3048;
 
-// one buildout version per chip, derived from the site's power budget
+// one buildout version per chip — the ENTIRE plant is derived from the chip's
+// actual load, so operational performance tracks the compute choice 1:1.
 export function siteVersionConfig(chipKey) {
   const chip = CHIP_OPTIONS.find(c => c.key === chipKey) ?? CHIP_OPTIONS[0];
   const s = SITE_77N;
-  const itKW = s.criticalITMW * 1000;
-  const racksTarget = Math.floor(itKW / chip.kwRack);
+  const itBudgetKW = s.criticalITMW * 1000;
   const racksPerRow = 22;
-  const rows = Math.max(2, Math.floor(racksTarget / racksPerRow)); // never exceed the power budget
-  const pue = chip.cooling === 'liquid' ? 1.15 : 1.32;   // verified against 1.25 design in analyst
+  const rows = Math.max(2, Math.floor(Math.floor(itBudgetKW / chip.kwRack) / racksPerRow));
+  const racksNominal = rows * racksPerRow;
+  const itKW = racksNominal * chip.kwRack;               // deployed IT at this version
   const liquid = chip.cooling === 'liquid';
-  const gpus = racksTarget * chip.gpusPerRack;
+  const pue = liquid ? 1.15 : 1.32;
+  const gpus = racksNominal * chip.gpusPerRack;
+
+  // plant sized N+1 from THIS version's load (not fixed counts)
+  const heatUnitKW = 1000;                                // 1 MW dry coolers / chillers
+  const heatUnits = Math.ceil(itKW * 1.05 / heatUnitKW) + 1;
+  const genCount = Math.ceil(itKW * pue / 3000) + 1;      // 3 MW enclosed sets, N+1
+  const upsLineups = Math.max(2, Math.round(itKW / 6000));// EXL lineups (visual; MW in analyst)
+  const battCabinets = Math.max(4, Math.ceil(itKW * (5 / 60) / 250)); // ~5 min ride-through @ 250 kWh/cab
+  const crahNeed = Math.ceil(itKW / 146);                 // CW146 air handlers, if air-cooled
+  const chillRows = Math.ceil(heatUnits / 6);
+  const yardD = 18 + Math.max(genCount * 0 + 14, 14) + chillRows * 5.2;
 
   return {
     title: `${s.name} — ${chip.label}`,
-    blurb: `<b>${s.name} · ${chip.label}.</b> ${s.grossSF.toLocaleString()} SF industrial retrofit,
-      3 halls, 50×50 ft bays, corner offices. ${s.utilityMW} MW utility / ${s.criticalITMW} MW critical IT
-      → <b>${racksTarget.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b> at ${chip.kwRack} kW/rack
-      (${chip.cooling}). Est. PUE ${pue} vs ${s.designPUE} design. Run the analyst to verify the power
-      chain and see AMD max-fit at 50 MW.`,
+    blurb: `<b>${s.name} · ${chip.label}.</b> ${s.grossSF.toLocaleString()} SF industrial retrofit —
+      3 halls, 50×50 ft bays, corner offices, 13 retained dock doors. ${s.utilityMW} MW utility /
+      ${s.criticalITMW} MW critical IT → <b>${racksNominal.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b>
+      at ${chip.kwRack} kW/rack. Plant sized to this platform: ${heatUnits}× 1 MW heat rejection (N+1),
+      ${genCount}× 3 MW gensets (N+1)${liquid ? '' : `, ${crahNeed} CRAH equivalents`}, PUE ${pue}.
+      <i>Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from gross SF — edit below to
+      match the survey.</i>`,
     podName: 'ROW',
     cooling: chip.cooling,
     basePUE: pue,
@@ -106,34 +121,38 @@ export function siteVersionConfig(chipKey) {
       kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
     },
     floors: 1,
-    wallH: s.clearH_ft * FT * 0.55,          // hook height under 32 ft clear
+    wallH: s.clearH_ft * FT * 0.55,
     shell: 'solid',
-    building: { w: s.buildingW_ft * FT, d: s.buildingD_ft * FT },
+    building: { w: custom.siteW_ft * FT, d: custom.siteD_ft * FT },
     halls: s.halls,
     columnGrid: s.columnFt * FT,
     officeCornerSF: s.officeSF / 4,
+    dockDoors: 13,                                        // per CapEx budget: 13 dock doors installed
+    driveIns: 2,                                          // 2 existing drive-ins converted
     grayD: 10,
-    yardD: 26,
-    crahCount: liquid ? 0 : 10,
+    yardD,
+    crahCount: liquid ? 0 : Math.min(crahNeed, 14),       // wall space caps the drawable count
     include: { busB: true, trays: true, pdus: true, crah: !liquid, containment: true },
     gray: [
       { id: 'ELC-007', count: 1, opts: { sections: 3 } },
-      { id: 'ELC-001', count: 3 },
-      { id: 'ELC-005', count: 5 },
+      { id: 'ELC-001', count: Math.min(upsLineups, 4) },
+      { id: 'ELC-005', count: Math.min(battCabinets, 8) },
       { id: 'ELC-009', count: 1 },
       { id: 'ELC-010', count: 1 },
       { id: 'ELC-006', count: 1, opts: { sections: 3 } },
     ],
     yard: {
       transformers: 2,
-      gensets: { id: 'BKP-003', count: 12 },              // 36 MW N+1 per budget
-      chillers: { id: liquid ? 'MEC-005' : 'MEC-001', count: 8 },
+      gensets: { id: 'BKP-003', count: Math.min(genCount, 14) },
+      chillers: { id: liquid ? 'MEC-005' : 'MEC-001', count: Math.min(heatUnits, 26) },
       tower: false, tes: false, fuel: 2,
     },
-    siteOverrides: {                                       // analyst uses budget MW, not visual counts
-      upsKW: s.upsMW * 1000, genKW: s.genMW * 1000,
+    siteOverrides: {
+      upsKW: s.upsMW * 1000, genKW: Math.min(genCount, 14) * 3000,
       utilityKW: s.utilityMW * 1000, designPUE: s.designPUE,
       tfKW: s.utilityMW * 1000,
+      battCabinets, crahNeed: liquid ? 0 : crahNeed,
+      heatUnits, footprintAssumed: true,
     },
     tourRackLine: `${chip.label} racks`,
     chip,
@@ -207,6 +226,12 @@ export function initBuilder(onChange) {
         `<option value="${c.key}" ${c.key === custom.chip ? 'selected' : ''}>${c.label}</option>`).join('')}</select>
       <div class="learn-hint">Pick the site, then flip through chip platforms — each is a full
       buildout version sized to the 24 MW critical IT budget. Freeform unlocks the manual controls below.</div>
+      <div class="ops-row" style="margin-top:10px"><div class="ops-label">Footprint W (ft) <span class="ops-val" id="bldSiteWVal">${custom.siteW_ft}</span></div>
+      <input type="range" id="bldSiteW" min="180" max="420" value="${custom.siteW_ft}" step="1"></div>
+      <div class="ops-row"><div class="ops-label">Footprint L (ft) <span class="ops-val" id="bldSiteDVal">${custom.siteD_ft}</span></div>
+      <input type="range" id="bldSiteD" min="300" max="800" value="${custom.siteD_ft}" step="1"></div>
+      <div class="learn-hint">135,650 SF gross is from the workbook; the W×L split is assumed —
+      set the real dimensions when you have the survey.</div>
     </div>
     <div class="panel-section">
       <div class="panel-head">IT BUILD</div>
@@ -272,6 +297,7 @@ export function initBuilder(onChange) {
     });
   };
   bind('bldSite', 'site'); bind('bldChip', 'chip');
+  bind('bldSiteW', 'siteW_ft', { num: true }); bind('bldSiteD', 'siteD_ft', { num: true });
   bind('bldRack', 'rack'); bind('bldRows', 'rows', { num: true }); bind('bldRPR', 'racksPerRow', { num: true });
   bind('bldFloors', 'floors', { num: true }); bind('bldWallH', 'wallH', { num: true }); bind('bldMargin', 'hallMarginX', { num: true });
   bind('bldShell', 'shell');

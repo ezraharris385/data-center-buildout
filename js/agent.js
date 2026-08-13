@@ -32,7 +32,8 @@ export function analyze(cfg, stats) {
     for (const [label, p] of [['Liquid (DLC)', 1.15], ['Design (workbook)', site.designPUE], ['Air-cooled', 1.32]]) {
       const need = itKW * p;
       const pass = need <= util;
-      (pass ? ok : bad)(`PUE ${p} → ${fmt(need)} utility draw vs ${fmt(util)} available — ${pass ? `fits (${fmt(util - need)} headroom)` : `EXCEEDS feed by ${fmt(need - util)}`}.`);
+      // hypothetical sweep — only the ACTIVE build's PUE can block the design
+      (pass ? ok : warn)(`PUE ${p} (${label}) → ${fmt(need)} vs ${fmt(util)} feed — ${pass ? `fits (${fmt(util - need)} headroom)` : `would exceed by ${fmt(need - util)} — not viable at this rack count`}.`);
     }
     if (itKW * pue > util) bad(`This build at PUE ${pue} needs ${fmt(itKW * pue)} — over the ${fmt(util)} interconnect. Shed racks or improve PUE.`);
     else ok(`This build: ${fmt(itKW)} IT × PUE ${pue} = ${fmt(itKW * pue)} — inside the ${fmt(util)} feed.`);
@@ -41,7 +42,15 @@ export function analyze(cfg, stats) {
     if (site.upsKW < itKW) bad(`UPS budget ${fmt(site.upsKW)} < IT load ${fmt(itKW)}.`);
     else ok(`UPS ${fmt(site.upsKW)} vs ${fmt(itKW)} IT — per workbook budget.`);
     if (site.genKW < itKW * pue) warn(`Generators ${fmt(site.genKW)} vs ${fmt(itKW * pue)} total — check N+1 at this PUE.`);
-    else ok(`Generators ${fmt(site.genKW)} (N+1 per budget) cover ${fmt(itKW * pue)} total facility load.`);
+    else ok(`Generators ${fmt(site.genKW)} (${Math.round(site.genKW / 3000)}× 3 MW, N+1 sized to this platform) cover ${fmt(itKW * pue)} total.`);
+
+    // cooling plant — sized from this chip's heat load
+    const needCool = itKW * 1.05;
+    if (stats.coolKW >= needCool) ok(`Heat rejection ${fmt(stats.coolKW)} (${stats.chillerCount}× 1 MW, N+1 from this platform's load) vs ${fmt(needCool)} heat.`);
+    else warn(`Heat rejection drawn ${fmt(stats.coolKW)} vs ${fmt(needCool)} needed — full design is ${site.heatUnits}× 1 MW; yard renders the first ${stats.chillerCount}.`);
+    if (site.crahNeed > 0) warn(`Air-cooled platform: needs ~${site.crahNeed} CW146-class air handlers for ${fmt(itKW)} IT — at this density rear-door HX or fan walls are the realistic fit-out; perimeter wall space caps the drawing at ${cfg.crahCount}.`);
+    if (site.battCabinets) ok(`Batteries: ${site.battCabinets} cabinets ≈ 5 min ride-through at full ${fmt(itKW)} IT (scales live in the failover sim).`);
+    if (site.footprintAssumed) warn(`Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from 135,650 SF gross — confirm against survey/ALTA before layout decisions.`);
 
     // AMD max-fit: the 50 MW question
     const amd = CHIP_OPTIONS.filter(c => c.key.startsWith('mi'));

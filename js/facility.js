@@ -189,6 +189,36 @@ export function buildFacility(scene, cfg, flows) {
   divider.position.set(0, (wallH - 0.5) / 2, 0);
   root.add(divider); layers.roof.push(divider);
 
+  /* ---------------- retained industrial loading (retrofit sites) ---------------- */
+  if (cfg.dockDoors) {
+    const doorW = 2.75, doorH = 3.0, wallX = hallW / 2;   // 9 ft docks on the east wall
+    const pitch = 4.9;
+    const runLen = cfg.dockDoors * pitch;
+    const z0 = Math.max(4, hallD * 0.5 - runLen / 2);
+    for (let i = 0; i < cfg.dockDoors; i++) {
+      const zd = z0 + i * pitch;
+      if (zd > hallD - 4) break;
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.18, doorH, doorW), mats.gensetDark());
+      door.position.set(wallX + 0.08, doorH / 2 + 1.2, zd);   // dock-high: sill at ~48"
+      root.add(door); layers.roof.push(door);
+      for (const s of [-1, 1]) {                               // bumpers
+        const bump = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.4, 0.35), mats.fanRing());
+        bump.position.set(wallX + 0.25, 1.35, zd + s * (doorW / 2 - 0.25));
+        root.add(bump); layers.roof.push(bump);
+      }
+    }
+    for (let i = 0; i < (cfg.driveIns ?? 0); i++) {            // converted drive-ins
+      const zd = z0 + cfg.dockDoors * pitch + 3 + i * 7;
+      if (zd > hallD - 5) break;
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.4, 4.3), mats.gensetEnclosure());
+      door.position.set(wallX + 0.09, 2.2, zd);
+      root.add(door); layers.roof.push(door);
+    }
+    const l = makeLabel(`LOADING — ${cfg.dockDoors} DOCKS RETAINED`, { size: 20, color: '#8fa6bd' });
+    l.position.set(wallX + 2, 5.2, hallD * 0.5);
+    root.add(l); layers.labels.push(l);
+  }
+
   /* ---------------- interior demising walls (split into N halls) ---------------- */
   const dividerZs = [];
   if ((cfg.halls ?? 1) > 1) {
