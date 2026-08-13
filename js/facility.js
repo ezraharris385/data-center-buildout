@@ -372,7 +372,8 @@ export function buildFacility(scene, cfg, flows) {
     group.position.set(x, 0, genRowZ);
     addPick(group);
     result.gensets.push({ group, fans });
-    flows.addFans(fans.map(fn => ({ userData: { hub: fn, axis: 'z' } })));
+    // parts-built fans carry their own hub (spin about local y); legacy procedural fans spin about z
+    flows.addFans(fans.map(fn => fn.userData?.hub ? fn : ({ userData: { hub: fn, axis: 'z' } })));
     const wp = exhaustAnchor.clone().applyEuler(new THREE.Euler(0, Math.PI / 2, 0)).add(group.position);
     flows.addExhaust(wp);
     genPositions.push(new THREE.Vector3(x, 1.6, genRowZ));
@@ -423,6 +424,19 @@ export function buildFacility(scene, cfg, flows) {
     tank.rotation.y = Math.PI / 2;
     addPick(tank);
   }
+
+  // yard equipment labels (so heat rejection never reads as "a water tank" again)
+  function yardLabel(text, x, y, z, color = '#8fa6bd') {
+    const l = makeLabel(text, { size: 22, color });
+    l.position.set(x, y, z);
+    root.add(l);
+    layers.labels.push(l);
+  }
+  if (nGen) yardLabel(`DIESEL GENSETS · ${nGen}× ${comp(genId).Model ?? ''}`, genPositions[Math.floor(nGen / 2)]?.x ?? 0, dims(genId).h + 1.6, genRowZ, '#ffc233');
+  if (nCh) yardLabel(`HEAT REJECTION · ${nCh}× ${comp(chId).Model ?? ''}`, 0, dims(chId).h + 2.0, chillRowZ, '#39c2ff');
+  if (yard.tower && towerPos) yardLabel('COOLING TOWER', towerPos.x, dims('MEC-004').h + 1.8, towerPos.z, '#39c2ff');
+  if (yard.tes) yardLabel('THERMAL STORAGE (CHILLED WATER)', -hallW / 2 - 9, dims('MEC-007').h * 0.55 + 1.8, chillRowZ + 3, '#7fd4ff');
+  if (nFuel) yardLabel(`DIESEL FUEL · ${nFuel}× 20,000 gal`, hallW / 2 + 7, dims('FUE-001').h + 1.6, genRowZ + (nFuel - 1) * 2.1 - 2, '#ff8a5c');
 
   // utility interconnect
   const utilPos = new THREE.Vector3(0, 0, yardZ0 - yardD + 3.5);

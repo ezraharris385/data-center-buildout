@@ -2,7 +2,7 @@
 // Every builder returns a THREE.Group whose base sits at y=0, centered on its
 // footprint, front facing +Z. Groups carry userData.componentId for the inspector.
 import * as THREE from 'three';
-import { comp, dims, STD, MM } from './catalog.js';
+import { comp, dims, STD, MM, partsFor } from './catalog.js';
 import { mats, blinkMats } from './materials.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -35,6 +35,103 @@ function ledStrip(parent, w, y, z, count, matPool) {
     l.position.set(-w / 2 + 0.03 + i * 0.026, y, z);
     parent.add(l);
   }
+}
+
+/* ============================================================ DATA-DRIVEN PARTS */
+// Builds a component from its render_parts.xlsx rows — the accuracy layer.
+// Returns { group, fans } (fans = spinnable hubs). Null if no parts exist.
+
+const hexMats = new Map();
+function resolveMat(key) {
+  if (key && key.startsWith('#')) {
+    if (!hexMats.has(key)) hexMats.set(key, new THREE.MeshStandardMaterial({ color: key, roughness: 0.55, metalness: 0.4 }));
+    return hexMats.get(key);
+  }
+  return mats[key] ? mats[key]() : mats.switchgear();
+}
+
+function makeFanHub(diaM, blades, mat) {
+  const fan = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(diaM / 2, Math.max(0.02, diaM * 0.035), 8, 24), mats.fanRing());
+  ring.rotation.x = Math.PI / 2;
+  fan.add(ring);
+  const hub = new THREE.Group();
+  const bladeLen = diaM * 0.44, bladeW = diaM * 0.16;
+  for (let b = 0; b < blades; b++) {
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(bladeLen, 0.015, bladeW), mat);
+    blade.position.x = diaM * 0.25;
+    blade.rotation.x = 0.35; // pitch
+    const holder = new THREE.Group();
+    holder.rotation.y = (b / blades) * Math.PI * 2;
+    holder.add(blade);
+    hub.add(holder);
+  }
+  const nose = new THREE.Mesh(new THREE.CylinderGeometry(diaM * 0.09, diaM * 0.09, 0.06, 10), mats.fanRing());
+  hub.add(nose);
+  fan.add(hub);
+  fan.userData.hub = hub;
+  return fan;
+}
+
+export function buildFromParts(id) {
+  const parts = partsFor(id);
+  if (!parts) return null;
+  const g = new THREE.Group();
+  const fans = [];
+  for (const p of parts) {
+    const count = Math.max(1, p.Count || 1);
+    const mat = resolveMat(p.Material);
+    for (let i = 0; i < count; i++) {
+      let mesh;
+      const dia = (p.Dia_mm || 0) * MM, len = (p.Len_mm || 0) * MM;
+      switch (p.Shape) {
+        case 'cyl':
+          mesh = new THREE.Mesh(new THREE.CylinderGeometry(dia / 2, dia / 2, len, 20), mat);
+          break;
+        case 'cylH':
+          mesh = new THREE.Mesh(new THREE.CylinderGeometry(dia / 2, dia / 2, len, 20), mat);
+          mesh.rotation.z = Math.PI / 2; // axis along X
+          break;
+        case 'torus':
+          mesh = new THREE.Mesh(new THREE.TorusGeometry(dia / 2, len / 2, 10, 40), mat);
+          break;
+        case 'fan':
+          mesh = makeFanHub(dia, p.Blades || 6, mat);
+          if (p.Spin) fans.push(mesh);
+          break;
+        case 'vpanel': // tilted panel: length along X, RotX leans it
+        case 'box':
+        default:
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(p.W_mm * MM, p.H_mm * MM, p.D_mm * MM), mat);
+      }
+      // per-part rotation, then array placement
+      const holder = new THREE.Group();
+      holder.add(mesh);
+      if (p.RotX_deg) mesh.rotation.x = (mesh.rotation.x || 0) + THREE.MathUtils.degToRad(p.RotX_deg);
+      if (p.RotY_deg) mesh.rotation.y += THREE.MathUtils.degToRad(p.RotY_deg);
+      if (p.RotZ_deg) mesh.rotation.z += THREE.MathUtils.degToRad(p.RotZ_deg);
+      const off = (p.Spacing_mm || 0) * MM * i;
+      holder.position.set(
+        p.Cx_mm * MM + (p.Axis === 'x' ? off : 0),
+        p.Cy_mm * MM + (p.Axis === 'y' ? off : 0),
+        p.Cz_mm * MM + (p.Axis === 'z' ? off : 0),
+      );
+      holder.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      g.add(holder);
+    }
+  }
+  tag(g, id);
+  return { group: g, fans };
+}
+
+
+// world-space exhaust point from a component's parts (top of the exhaust stack)
+function exhaustAnchorFromParts(id) {
+  const parts = partsFor(id);
+  if (!parts) return null;
+  const st = parts.find(q => /exhaust (stack|flex)/i.test(q.Part));
+  if (!st) return null;
+  return new THREE.Vector3(st.Cx_mm * MM, (st.Cy_mm + (st.Len_mm || 0) / 2) * MM, st.Cz_mm * MM);
 }
 
 /* ============================================================ RACKS */
@@ -174,6 +271,7 @@ export function buildORv3(id = 'RCK-006', { fill = 0.8 } = {}) {
 
 // Row CDU — Vertiv XDU 1350 class (LCL-002)
 export function buildRowCDU(id = 'LCL-002') {
+  { const p = buildFromParts(id); if (p) return p.group; }
   const { w, d, h } = dims(id);
   const g = new THREE.Group();
   const body = box(w, h, d, mats.cdu());
@@ -208,6 +306,7 @@ export function buildInRowCooler(id) {
 
 // Perimeter CRAH — Liebert CW146 (ACL-002), wide unit
 export function buildCRAH(id = 'ACL-002') {
+  { const p = buildFromParts(id); if (p) return p.group; }
   const { w, d, h } = dims(id);
   const g = new THREE.Group();
   const body = box(w, h, d, mats.crah());
@@ -294,6 +393,7 @@ export function buildFiberDuct(id, length = 10) {
 /* ============================================================ GRAY SPACE */
 
 export function buildUPS(id) {
+  { const p = buildFromParts(id); if (p) return p.group; }
   const { w, d, h } = dims(id);
   const g = new THREE.Group();
   const body = box(w, h, d, mats.upsBody());
@@ -346,6 +446,7 @@ export function buildSwitchgear(id, sections = 4) {
 }
 
 export function buildTransformer(id = 'ELC-008') {
+  { const p = buildFromParts(id); if (p) return p.group; }
   const { w, d, h } = dims(id);
   const g = new THREE.Group();
   const core = box(w * 0.55, h * 0.8, d * 0.85, mats.transformer());
@@ -395,6 +496,7 @@ export function buildSTS(id = 'ELC-009') {
 // Enclosed genset (BKP-003) — 40ft-class enclosure with radiator end + exhaust.
 // Returns { group, fans: [], exhaustAnchor } for animation hooks.
 export function buildGenset(id = 'BKP-003') {
+  { const p = buildFromParts(id); if (p) return { group: p.group, fans: p.fans, exhaustAnchor: exhaustAnchorFromParts(id) ?? new THREE.Vector3(0, dims(id).h, 0) }; }
   const { w: L, d: W, h: H } = dims(id); // 12.19 x 2.44 x 3.96 (length along X)
   const g = new THREE.Group();
   const body = box(L * 0.86, H * 0.72, W, mats.gensetEnclosure());
@@ -437,6 +539,7 @@ export function buildGenset(id = 'BKP-003') {
 
 // Open genset on skid (BKP-001/002)
 export function buildOpenGenset(id) {
+  { const p = buildFromParts(id); if (p) return { group: p.group, fans: p.fans, exhaustAnchor: exhaustAnchorFromParts(id) ?? new THREE.Vector3(0, dims(id).h, 0) }; }
   const { w: L, d: W, h: H } = dims(id);
   const g = new THREE.Group();
   const skid = box(L, 0.2, W, mats.gensetDark());
@@ -454,6 +557,7 @@ export function buildOpenGenset(id) {
 
 // Air-cooled chiller / dry cooler (MEC-001/002/005): long unit with top fan row.
 export function buildChiller(id) {
+  { const p = buildFromParts(id); if (p) return p; }
   const { w: L, d: W, h: H } = dims(id);
   const g = new THREE.Group();
   const body = box(L, H * 0.55, W, mats.chiller());
@@ -515,6 +619,7 @@ export function buildWaterChiller(id = 'MEC-003') {
 
 // Cooling tower cell (MEC-004)
 export function buildCoolingTower(id = 'MEC-004') {
+  { const p = buildFromParts(id); if (p) return { group: p.group, fans: p.fans, mistAnchor: new THREE.Vector3(0, dims(id).h * 0.98, 0) }; }
   const { w: L, d: W, h: H } = dims(id);
   const g = new THREE.Group();
   const basin = box(L, H * 0.12, W, mats.gensetDark());
@@ -547,6 +652,7 @@ export function buildCoolingTower(id = 'MEC-004') {
 
 // TES tank (MEC-007) / fuel tank (FUE-001)
 export function buildTank(id, vertical = true) {
+  { const p = buildFromParts(id); if (p) return p.group; }
   const { w: L, d: W, h: H } = dims(id);
   const g = new THREE.Group();
   if (vertical) {
@@ -621,6 +727,7 @@ export function buildPipe(points, radius, mat) {
 /* ============================================================ DISPATCH */
 
 export function buildById(id, opts = {}) {
+  { const p = buildFromParts(id); if (p) return p.group; }
   const c = comp(id);
   const sub = c.Subcategory ?? '';
   if (id === 'RCK-004' || id === 'RCK-005') return buildNVL72(id);

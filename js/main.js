@@ -191,7 +191,11 @@ function flyToPose(pos, target, duration = 1.3) {
     t0: controls.target.clone(), t1: target.clone(),
   };
 }
-window.__cam = { get pos() { return camera.position.toArray(); }, fly: (k, d) => flyTo(k, d) };
+window.__cam = {
+  get pos() { return camera.position.toArray(); },
+  fly: (k, d) => flyTo(k, d),
+  pose: (px, py, pz, tx, ty, tz) => flyToPose(new THREE.Vector3(px, py, pz), new THREE.Vector3(tx, ty, tz), 0),
+};
 function updateFlight(dt) {
   if (!flight) return;
   flight.t += dt;

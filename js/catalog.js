@@ -2,6 +2,7 @@
 // All source dimensions are millimeters; the scene works in meters (1 unit = 1 m).
 
 let CATALOG = null;
+let RENDER_PARTS = {};
 const byId = new Map();
 
 export const MM = 0.001;
@@ -20,8 +21,14 @@ export async function loadCatalog() {
   const res = await fetch('data/catalog.json');
   CATALOG = await res.json();
   for (const c of CATALOG.components) byId.set(c.Component_ID, c);
+  try {
+    RENDER_PARTS = await (await fetch('data/render_parts.json')).json();
+  } catch { RENDER_PARTS = {}; }
   return CATALOG;
 }
+
+// render-detail parts (data/render_parts.xlsx → json): sub-part geometry per SKU
+export function partsFor(id) { return RENDER_PARTS[id] ?? null; }
 
 export function comp(id) {
   const c = byId.get(id);
