@@ -308,3 +308,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 4px; cur
 /* ---------- tour mode ---------- */
 body.tour-mode #topbar, body.tour-mode #leftPanel, body.tour-mode #rightPanel,
 body.tour-mode #hintbar, body.tour-mode #flowCard { display: none !important; }
+
+/* ---------- version comparison table ---------- */
+.ver-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+.ver-table th { text-align: left; font: 700 8.5px var(--mono); letter-spacing: .08em; color: var(--ink-dim); padding: 3px 4px; border-bottom: 1px solid var(--panel-border); }
+.ver-table td { padding: 3.5px 4px; color: var(--ink); border-bottom: 1px solid rgba(255,255,255,.04); font-family: var(--mono); font-size: 9.5px; }
+.ver-table td:first-child { font-family: var(--sans); font-size: 10px; }
+.ver-table tbody tr { cursor: pointer; }
+.ver-table tbody tr:hover { background: rgba(57,194,255,.07); }
+.ver-table tr.sel { background: rgba(255,194,51,.12); }
+.ver-table tr.sel td:first-child { color: var(--amber); font-weight: 700; }
+.build-tag { font: 400 9px var(--mono); color: rgba(125,142,163,.55); margin-left: 6px; }

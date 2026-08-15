@@ -100,19 +100,31 @@ export const custom = {
 
 const FT = 0.3048;
 
+// shared sizing math: what this chip deploys inside the 77N confines
+export function versionStats(chip) {
+  const s = SITE_77N;
+  const liquid = chip.cooling === 'liquid';
+  const pue = liquid ? 1.15 : 1.32;
+  const itBudgetKW = Math.floor(Math.min(s.utilityMW * 1000 / pue, s.upsMW * 1000));
+  const maxRacks = Math.floor(itBudgetKW / chip.kwRack);
+  return {
+    liquid, pue, maxRacks,
+    itKW: maxRacks * chip.kwRack,
+    gpus: maxRacks * chip.gpusPerRack,
+    utilMW: (maxRacks * chip.kwRack * pue) / 1000,
+  };
+}
+
 // one buildout version per chip — the ENTIRE plant is derived from the chip's
 // actual load, so operational performance tracks the compute choice 1:1.
 export function siteVersionConfig(chipKey) {
   const chip = CHIP_OPTIONS.find(c => c.key === chipKey) ?? CHIP_OPTIONS[0];
   const s = SITE_77N;
-  const liquid = chip.cooling === 'liquid';
-  const pue = liquid ? 1.15 : 1.32;
   // OPTIMIZED sizing: deployable IT = what the confines allow —
   //   min( 30 MW utility ÷ platform PUE , 30 MW UPS budget ).
   // The workbook's 24 MW critical IT assumed PUE 1.25; efficient liquid plants
   // recover that gap as extra compute, air plants pay the tax.
-  const itBudgetKW = Math.floor(Math.min(s.utilityMW * 1000 / pue, s.upsMW * 1000));
-  const maxRacks = Math.floor(itBudgetKW / chip.kwRack);
+  const { liquid, pue, maxRacks } = versionStats(chip);
   // rows auto-fit to the bay width: 34 slots with a mid-row egress break every 17,
   // in-row coolers every 5th slot on air builds
   const racksPerRow = 34;
@@ -257,8 +269,9 @@ export function initBuilder(onChange) {
       <div class="bld-label">Compute platform</div>
       <select id="bldChip">${CHIP_OPTIONS.map(c =>
         `<option value="${c.key}" ${c.key === custom.chip ? 'selected' : ''}>${c.label}</option>`).join('')}</select>
-      <div class="learn-hint">Pick the site, then flip through chip platforms — each is a full
-      buildout version sized to the 24 MW critical IT budget. Freeform unlocks the manual controls below.</div>
+      <div class="learn-hint">Picking a chip loads that platform's full buildout — racks, cooling,
+      yard plant, and telemetry all re-derive. Click any row below to switch.</div>
+      <div id="verTable"></div>
       <div class="ops-row" style="margin-top:10px"><div class="ops-label">Footprint W (ft) <span class="ops-val" id="bldSiteWVal">${custom.siteW_ft}</span></div>
       <input type="range" id="bldSiteW" min="180" max="420" value="${custom.siteW_ft}" step="1"></div>
       <div class="ops-row"><div class="ops-label">Footprint L (ft) <span class="ops-val" id="bldSiteDVal">${custom.siteD_ft}</span></div>
@@ -318,6 +331,34 @@ export function initBuilder(onChange) {
       ${slider('bldFuel', 'Fuel tanks (20k gal)', 0, 4, custom.fuel)}
     </div>`;
 
+  function renderVersionTable() {
+    const vt = document.getElementById('verTable');
+    vt.innerHTML = `<table class="ver-table">
+      <thead><tr><th>Platform</th><th>Racks</th><th>GPUs</th><th>IT MW</th><th>PUE</th></tr></thead>
+      <tbody>${CHIP_OPTIONS.map(c => {
+        const v = versionStats(c);
+        return `<tr data-chip="${c.key}" class="${c.key === custom.chip && custom.site === '77n' ? 'sel' : ''}">
+          <td>${c.label.split(' (')[0]}</td><td>${v.maxRacks.toLocaleString()}</td>
+          <td>${v.gpus.toLocaleString()}</td><td>${(v.itKW / 1000).toFixed(1)}</td><td>${v.pue}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  }
+  renderVersionTable();
+
+  // picking a chip (dropdown or table row) always activates the site version —
+  // this is what makes "flip through the chips" visibly rebuild everything
+  function activateChip(key) {
+    custom.chip = key;
+    custom.site = '77n';
+    document.getElementById('bldSite').value = '77n';
+    document.getElementById('bldChip').value = key;
+    renderVersionTable();
+    onChange();
+  }
+  document.getElementById('verTable').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-chip]');
+    if (tr) activateChip(tr.dataset.chip);
+  });
+
   let deb = null;
   const change = () => { clearTimeout(deb); deb = setTimeout(onChange, 350); };
   const bind = (id, key, { num = false, checkbox = false } = {}) => {
@@ -329,7 +370,8 @@ export function initBuilder(onChange) {
       change();
     });
   };
-  bind('bldSite', 'site'); bind('bldChip', 'chip');
+  document.getElementById('bldSite').addEventListener('input', e => { custom.site = e.target.value; renderVersionTable(); change(); });
+  document.getElementById('bldChip').addEventListener('input', e => activateChip(e.target.value));
   bind('bldSiteW', 'siteW_ft', { num: true }); bind('bldSiteD', 'siteD_ft', { num: true });
   bind('bldRack', 'rack'); bind('bldRows', 'rows', { num: true }); bind('bldRPR', 'racksPerRow', { num: true });
   bind('bldFloors', 'floors', { num: true }); bind('bldWallH', 'wallH', { num: true }); bind('bldMargin', 'hallMarginX', { num: true });

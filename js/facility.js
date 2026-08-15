@@ -575,8 +575,8 @@ export function buildFacility(scene, cfg, flows) {
     addPick(group);
     flows.addFans(fans.map(fn => fn.userData.hub ? fn : { userData: { hub: fn } }));
     chillPositions.push(new THREE.Vector3(x, 1.2, zc));
-    // heat exhausts upward off the fan deck — tight column, tall rise (not a pool in the coils)
-    flows.addHeat(new THREE.Vector3(x, dims(chId).h + 0.7, zc), { count: 26, spread: chLen * 0.22, rise: 4.2, size: 0.9, opacity: 0.055 });
+    // heat exhausts upward WELL clear of the fan deck — thin fast columns, never a pool
+    flows.addHeat(new THREE.Vector3(x, dims(chId).h + 1.4, zc), { count: 22, spread: 1.3, rise: 5.5, size: 0.8, opacity: 0.045 });
   }
 
   let towerPos = null;
