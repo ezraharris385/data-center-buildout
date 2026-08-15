@@ -106,18 +106,24 @@ export function siteVersionConfig(chipKey) {
   const chip = CHIP_OPTIONS.find(c => c.key === chipKey) ?? CHIP_OPTIONS[0];
   const s = SITE_77N;
   const liquid = chip.cooling === 'liquid';
-  const pueSized = liquid ? 1.15 : 1.32;
-  // deployable IT is the LESSER of the critical-IT budget and what the 30 MW
-  // interconnect can feed at this platform's PUE — air versions pay a GPU tax
-  const itBudgetKW = Math.min(s.criticalITMW * 1000, Math.floor(s.utilityMW * 1000 / pueSized));
-  const racksPerRow = 22;                                 // slots per row
-  const inRowEvery = liquid ? 0 : 5;                      // air: an in-row cooler every 5th slot
-  const racksEff = inRowEvery ? racksPerRow - Math.floor(racksPerRow / inRowEvery) : racksPerRow;
-  const rows = Math.max(2, Math.floor(Math.floor(itBudgetKW / chip.kwRack) / racksEff));
-  const racksNominal = rows * racksEff;
-  const itKW = racksNominal * chip.kwRack;               // deployed IT at this version
-  const pue = pueSized;
-  const gpus = racksNominal * chip.gpusPerRack;
+  const pue = liquid ? 1.15 : 1.32;
+  // OPTIMIZED sizing: deployable IT = what the confines allow —
+  //   min( 30 MW utility ÷ platform PUE , 30 MW UPS budget ).
+  // The workbook's 24 MW critical IT assumed PUE 1.25; efficient liquid plants
+  // recover that gap as extra compute, air plants pay the tax.
+  const itBudgetKW = Math.floor(Math.min(s.utilityMW * 1000 / pue, s.upsMW * 1000));
+  const maxRacks = Math.floor(itBudgetKW / chip.kwRack);
+  // rows auto-fit to the bay width: 34 slots with a mid-row egress break every 17,
+  // in-row coolers every 5th slot on air builds
+  const racksPerRow = 34;
+  const egressEvery = 17;
+  const inRowEvery = liquid ? 0 : 5;
+  const racksEff = racksPerRow - Math.floor(racksPerRow / egressEvery)
+    - (inRowEvery ? Math.floor(racksPerRow / inRowEvery) : 0);
+  const rows = Math.max(2, Math.ceil(maxRacks / racksEff));
+  const racksNominal = maxRacks;                          // placement stops at the power limit
+  const itKW = maxRacks * chip.kwRack;
+  const gpus = maxRacks * chip.gpusPerRack;
 
   // plant sized N+1 from THIS version's load (not fixed counts)
   const heatUnitKW = 1000;                                // 1 MW dry coolers / chillers
@@ -132,9 +138,9 @@ export function siteVersionConfig(chipKey) {
   return {
     title: `${s.name} — ${chip.label}`,
     blurb: `<b>${s.name} · ${chip.label}.</b> ${s.grossSF.toLocaleString()} SF industrial retrofit —
-      3 halls, 50×50 ft bays, corner offices, 13 retained dock doors. ${s.utilityMW} MW utility /
-      ${s.criticalITMW} MW critical IT → <b>${racksNominal.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b>
-      at ${chip.kwRack} kW/rack. <b>Usage:</b> ${chip.use}. <b>Physical:</b> ${chip.rackKg} kg/rack,
+      3 halls, 50×50 ft bays, corner offices, 13 retained dock doors. <b>Optimized:</b> ${s.utilityMW} MW feed
+      ÷ PUE ${pue} → <b>${racksNominal.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b> at
+      ${chip.kwRack} kW/rack (workbook baseline: ${s.criticalITMW} MW @ PUE ${s.designPUE}). <b>Usage:</b> ${chip.use}. <b>Physical:</b> ${chip.rackKg} kg/rack,
       ${chip.domain}-GPU scale-up domain, ${chip.volts}${liquid ? ', hot-aisle contained DLC' : ', cold-aisle contained air + in-row coolers'}.
       Plant sized to this platform: ${heatUnits}× 1 MW heat rejection (N+1), ${genCount}× 3 MW gensets (N+1)${liquid ? '' : `, ${crahNeed} CRAH equivalents`}, PUE ${pue}.
       <i>Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from gross SF — edit below to
@@ -143,9 +149,10 @@ export function siteVersionConfig(chipKey) {
     cooling: chip.cooling,
     basePUE: pue,
     rows: {
-      count: rows, racksPerRow, rackId: chip.rackId, inRowEvery,
-      kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
+      count: rows, racksPerRow, rackId: chip.rackId, inRowEvery, egressEvery,
+      maxRacks, kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
     },
+    balanceHalls: true,
     floors: 1,
     wallH: s.clearH_ft * FT * 0.55,
     shell: 'solid',

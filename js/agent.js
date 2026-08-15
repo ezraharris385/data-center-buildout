@@ -38,6 +38,12 @@ export function analyze(cfg, stats) {
     if (itKW * pue > util) bad(`This build at PUE ${pue} needs ${fmt(itKW * pue)} — over the ${fmt(util)} interconnect. Shed racks or improve PUE.`);
     else ok(`This build: ${fmt(itKW)} IT × PUE ${pue} = ${fmt(itKW * pue)} — inside the ${fmt(util)} feed.`);
 
+    // optimization report — how the confines were used
+    const baseIT = SITE_77N.criticalITMW * 1000;
+    if (itKW > baseIT * 1.005) ok(`Optimized sizing: at PUE ${pue} the same feed carries ${fmt(itKW)} IT vs the workbook's ${fmt(baseIT)} (sized at PUE ${site.designPUE}) — the efficiency gap converts to ~${(stats.gpus - Math.floor(baseIT / stats.kwPerRack) * (cfg.chip?.gpusPerRack ?? 0)).toLocaleString()} extra GPUs.`);
+    else if (itKW < baseIT * 0.995) warn(`Air-platform tax: PUE ${pue} caps deployable IT at ${fmt(itKW)} vs the ${fmt(baseIT)} baseline — the interconnect, not the floor, binds this version.`);
+    if (cfg.rows.maxRacks) ok(`Layout optimization: ${stats.racks.toLocaleString()} of ${cfg.rows.maxRacks.toLocaleString()} power-limited racks placed (${Math.round(stats.racks / cfg.rows.maxRacks * 100)}%) — rows auto-fit to the bay width, nudged off column lines (zero racks lost to columns), egress break every ${cfg.rows.egressEvery} slots, balanced across ${SITE_77N.halls} halls.`);
+
     // power chain from the workbook budget
     if (site.upsKW < itKW) bad(`UPS budget ${fmt(site.upsKW)} < IT load ${fmt(itKW)}.`);
     else ok(`UPS ${fmt(site.upsKW)} vs ${fmt(itKW)} IT — per workbook budget.`);

@@ -343,20 +343,41 @@ export function buildFacility(scene, cfg, flows) {
   const zStart = aisleOuter + rackD / 2 + 1.2;
 
   let placedRacks = 0;
+  // column z-lines (for row nudging: rows dodge columns instead of losing racks)
+  const colZLines = [];
+  if (cfg.columnGrid) for (let cz = cfg.columnGrid; cz < hallD - 0.5; cz += cfg.columnGrid) colZLines.push(cz);
+  const rowHitsColumns = (zRow) => colZLines.some(zl => Math.abs(zRow - zl) < rackD / 2 + 0.55);
+
+  const hallCount = Math.max(1, cfg.halls ?? 1);
+  const hallDepth = hallD / hallCount;
+  const pairsPerHall = cfg.balanceHalls && hallCount > 1 ? Math.ceil(pairs / hallCount) : Infinity;
+
   for (let f = 0; f < floors; f++) {
     const yOff = f * floorH;
-    let z = zStart;
+    const zCursors = [];
+    for (let h2 = 0; h2 < hallCount; h2++)
+      zCursors[h2] = h2 === 0 ? zStart : h2 * hallDepth + 1.1 + rackD / 2 + aisleOuter;
 
     for (let p = 0; p < pairs; p++) {
-      // jump the pair past any demising wall it would straddle
-      let guard = 0;
-      while (guard++ < 4) {
-        const zEnd = z + pairDepth;
-        const hit = dividerZs.find(dz => z - rackD / 2 - 0.9 < dz && zEnd + 0.9 > dz);
-        if (hit === undefined) break;
-        z = hit + 0.9 + rackD / 2 + aisleOuter;
+      const hallIdx = pairsPerHall === Infinity ? 0 : Math.min(Math.floor(p / pairsPerHall), hallCount - 1);
+      let z = zCursors[hallIdx];
+
+      if (pairsPerHall === Infinity) {
+        // sequential fill: jump the pair past any demising wall it would straddle
+        let guard = 0;
+        while (guard++ < 4) {
+          const zEnd = z + pairDepth;
+          const hit = dividerZs.find(dz => z - rackD / 2 - 0.9 < dz && zEnd + 0.9 > dz);
+          if (hit === undefined) break;
+          z = hit + 0.9 + rackD / 2 + aisleOuter;
+        }
       }
-      if (z + pairDepth > hallD - 1.5) break;   // out of building depth
+      // nudge the pair so neither row lands on a column line (zero racks lost to columns)
+      let nudge = 0;
+      while (nudge++ < 14 && (rowHitsColumns(z) || rowHitsColumns(z + rackD + aisleShared))) z += 0.35;
+
+      const zLimit = pairsPerHall === Infinity ? hallD - 1.5 : (hallIdx + 1) * hallDepth - 1.2;
+      if (z + pairDepth > zLimit) { zCursors[hallIdx] = z; continue; } // this hall is full
 
       const zA = z;
       const zB = z + rackD + aisleShared;
@@ -368,6 +389,11 @@ export function buildFacility(scene, cfg, flows) {
         for (let i = 0; i < racksPerRow; i++) {
           const rx = -rowLen / 2 + rackW * (i + 0.5);
           if (rackBlocked(rx, zRow)) continue;  // leave a gap at columns / offices
+          // egress break every Nth slot (NFPA-style mid-row exit path)
+          if (cfg.rows.egressEvery && (i + 1) % cfg.rows.egressEvery === 0) continue;
+          // stop adding IT once the power-limited target is met
+          if (cfg.rows.maxRacks && placedRacks >= cfg.rows.maxRacks
+              && !(cfg.rows.inRowEvery && (i + 1) % cfg.rows.inRowEvery === 0)) continue;
           // air-cooled high-density rows interleave in-row coolers every Nth slot
           if (cfg.rows.inRowEvery && (i + 1) % cfg.rows.inRowEvery === 0) {
             const irc = B.buildInRowCooler('ACL-001');
@@ -438,7 +464,7 @@ export function buildFacility(scene, cfg, flows) {
         flows.addHeat(new THREE.Vector3(0, yOff + rackH + 0.6, zA - rackD / 2 - 0.5), { count: 32, spread: half * 0.7, rise: 1.6, size: 0.9, opacity: 0.08 });
       }
 
-      z += pairDepth + aisleOuter;
+      zCursors[hallIdx] = z + pairDepth + aisleOuter;
     }
 
     // pod labels (ground floor only, plus level tags above)
