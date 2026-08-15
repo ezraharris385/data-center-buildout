@@ -50,6 +50,20 @@ export function analyze(cfg, stats) {
     else warn(`Heat rejection drawn ${fmt(stats.coolKW)} vs ${fmt(needCool)} needed — full design is ${site.heatUnits}× 1 MW; yard renders the first ${stats.chillerCount}.`);
     if (site.crahNeed > 0) warn(`Air-cooled platform: needs ~${site.crahNeed} CW146-class air handlers for ${fmt(itKW)} IT — at this density rear-door HX or fan walls are the realistic fit-out; perimeter wall space caps the drawing at ${cfg.crahCount}.`);
     if (site.battCabinets) ok(`Batteries: ${site.battCabinets} cabinets ≈ 5 min ride-through at full ${fmt(itKW)} IT (scales live in the failover sim).`);
+
+    // platform-specific physical & usage engineering
+    const chip = cfg.chip;
+    if (chip) {
+      const rc = comp(chip.rackId);
+      const fpM2 = (rc.Width_mm / 1000) * (rc.Depth_mm / 1000);
+      const psf = Math.round(chip.rackKg / fpM2 * 0.2048);
+      if (psf > 250) warn(`Floor loading: ${chip.rackKg} kg on a ${(fpM2 * 10.764).toFixed(1)} SF footprint ≈ ${psf} psf point load — above typical industrial slab (~250 psf). The budget's 30,000 SF slab reinforcement goes under these rows.`);
+      else ok(`Floor loading ≈ ${psf} psf — inside typical industrial slab capacity; reinforcement allowance stays contingency.`);
+      ok(`Scale-up domain: ${chip.domain === 72 ? 'one 72-GPU domain per rack — cross-rack traffic is scale-out only, so the fabric is leaf/spine between rows' : '8-GPU nodes — ALL cross-node training traffic rides the scale-out fabric; expect denser ToR/leaf switching per row'}.`);
+      ok(`Power delivery: ${chip.volts} — ${chip.volts.includes('48') ? 'rack-scale power shelves on a DC busbar; fewer breakers, busway plug-ins sized per rack' : 'conventional PDU whips from the busway; more branch circuits, standard colo practice'}.`);
+      ok(`Usage profile: ${chip.use}.`);
+      if (!cfg.cooling.includes('liquid') && cfg.rows.inRowEvery) ok(`Air fit-out: in-row coolers every ${cfg.rows.inRowEvery}th slot + cold-aisle containment (visible in the rows) carry the load the perimeter CRAHs can't.`);
+    }
     if (site.footprintAssumed) warn(`Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from 135,650 SF gross — confirm against survey/ALTA before layout decisions.`);
 
     // AMD max-fit: the 50 MW question

@@ -9,16 +9,36 @@ import { comp, kw } from './catalog.js';
    closest catalog rack for true-dimension rendering. Power figures are
    vendor-published rack/system numbers (recall-grade). */
 export const CHIP_OPTIONS = [
-  { key: 'gb200',  label: 'GB200 class (NVL72)',        gpusPerRack: 72, kwRack: 120, cooling: 'liquid', rackId: 'RCK-004', builder: () => B.buildNVL72('RCK-004'), year: 2025 },
-  { key: 'vr200',  label: 'Vera Rubin (VR200 NVL144)',  gpusPerRack: 72, kwRack: 132, cooling: 'liquid', rackId: 'RCK-005', builder: () => B.buildNVL72('RCK-005'), year: 2027, note: '72 Rubin packages / 144 dies, Oberon-class rack' },
-  { key: 'gb300',  label: 'Blackwell Ultra (GB300 NVL72)', gpusPerRack: 72, kwRack: 135, cooling: 'liquid', rackId: 'RCK-005', builder: () => B.buildNVL72('RCK-005'), year: 2026 },
-  { key: 'b200',   label: 'Blackwell (GB200/B200 HGX)',  gpusPerRack: 32, kwRack: 58,  cooling: 'liquid', rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2025, note: '4× HGX B200 8-GPU nodes per rack, DLC' },
-  { key: 'h200',   label: 'Hopper H200 (HGX)',           gpusPerRack: 32, kwRack: 44,  cooling: 'air',    rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2024, note: '4× HGX H200 nodes, air/RDHx' },
-  { key: 'h100',   label: 'Hopper H100 SXM (HGX)',       gpusPerRack: 32, kwRack: 41,  cooling: 'air',    rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2023, note: '4× HGX H100 nodes' },
-  { key: 'mi450x', label: 'Instinct MI450X (Helios)',    gpusPerRack: 72, kwRack: 140, cooling: 'liquid', rackId: 'RCK-004', builder: () => B.buildNVL72('RCK-004'), year: 2026, note: 'AMD rack-scale, 72 GPU, DLC' },
-  { key: 'mi355x', label: 'Instinct MI355X (2025)',      gpusPerRack: 32, kwRack: 62,  cooling: 'liquid', rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2025, note: '4× UBB 8-GPU, 1.4 kW/GPU, DLC' },
-  { key: 'mi325x', label: 'Instinct MI325X (2024)',      gpusPerRack: 32, kwRack: 46,  cooling: 'air',    rackId: 'RCK-003', builder: () => B.buildRackEnclosure('RCK-003', { fillRU: 0.85 }), year: 2024, note: '4× UBB, 1 kW/GPU' },
-  { key: 'mi300x', label: 'Instinct MI300X (2024)',      gpusPerRack: 32, kwRack: 38,  cooling: 'air',    rackId: 'RCK-002', builder: () => B.buildRackEnclosure('RCK-002', { fillRU: 0.85 }), year: 2024, note: '4× UBB, 750 W/GPU' },
+  { key: 'gb200',  label: 'GB200 class (NVL72)',        gpusPerRack: 72, kwRack: 120, cooling: 'liquid', rackId: 'RCK-004',
+    builder: () => B.buildNVL72('RCK-004', { accent: '#3ddc84' }), year: 2025, rackKg: 1360, domain: 72, volts: '48 VDC busbar',
+    use: 'Frontier training — 72-GPU NVLink scale-up domain, one machine per rack' },
+  { key: 'vr200',  label: 'Vera Rubin (VR200 NVL144)',  gpusPerRack: 72, kwRack: 132, cooling: 'liquid', rackId: 'RCK-005',
+    builder: () => B.buildNVL72('RCK-005', { accent: '#8a6cff' }), year: 2027, rackKg: 1450, domain: 72, volts: '48 VDC busbar',
+    use: 'Next-gen frontier training — 144 dies / 72 packages, Oberon-class rack' },
+  { key: 'gb300',  label: 'Blackwell Ultra (GB300 NVL72)', gpusPerRack: 72, kwRack: 135, cooling: 'liquid', rackId: 'RCK-005',
+    builder: () => B.buildNVL72('RCK-005', { accent: '#2fd1c0' }), year: 2026, rackKg: 1400, domain: 72, volts: '48 VDC busbar',
+    use: 'Frontier training + high-throughput reasoning inference' },
+  { key: 'b200',   label: 'Blackwell (GB200/B200 HGX)',  gpusPerRack: 32, kwRack: 58,  cooling: 'liquid', rackId: 'RCK-003',
+    builder: () => B.buildHGXRack('RCK-003', { liquid: true, accent: '#76b900' }), year: 2025, rackKg: 950, domain: 8, volts: '415 V AC whips',
+    use: 'Training + inference on 8-GPU HGX nodes — cloud-standard building block, DLC' },
+  { key: 'h200',   label: 'Hopper H200 (HGX)',           gpusPerRack: 32, kwRack: 44,  cooling: 'air',    rackId: 'RCK-003',
+    builder: () => B.buildHGXRack('RCK-003', { liquid: false, accent: '#76b900' }), year: 2024, rackKg: 880, domain: 8, volts: '415 V AC whips',
+    use: 'Inference + fine-tuning — memory-upgraded Hopper, air/RDHx cooled' },
+  { key: 'h100',   label: 'Hopper H100 SXM (HGX)',       gpusPerRack: 32, kwRack: 41,  cooling: 'air',    rackId: 'RCK-003',
+    builder: () => B.buildHGXRack('RCK-003', { liquid: false, accent: '#76b900' }), year: 2023, rackKg: 860, domain: 8, volts: '415 V AC whips',
+    use: 'The installed-base workhorse — training/fine-tune/inference on 8-GPU nodes' },
+  { key: 'mi450x', label: 'Instinct MI450X (Helios)',    gpusPerRack: 72, kwRack: 140, cooling: 'liquid', rackId: 'RCK-004',
+    builder: () => B.buildNVL72('RCK-004', { accent: '#e0442e' }), year: 2026, rackKg: 1500, domain: 72, volts: '48 VDC busbar',
+    use: 'AMD rack-scale frontier training — 72-GPU UALink domain (Helios)' },
+  { key: 'mi355x', label: 'Instinct MI355X (2025)',      gpusPerRack: 32, kwRack: 62,  cooling: 'liquid', rackId: 'RCK-003',
+    builder: () => B.buildHGXRack('RCK-003', { liquid: true, accent: '#e0442e' }), year: 2025, rackKg: 980, domain: 8, volts: '415 V AC whips',
+    use: 'AMD training + inference — 1.4 kW/GPU UBB nodes, DLC required' },
+  { key: 'mi325x', label: 'Instinct MI325X (2024)',      gpusPerRack: 32, kwRack: 46,  cooling: 'air',    rackId: 'RCK-003',
+    builder: () => B.buildHGXRack('RCK-003', { liquid: false, accent: '#e0442e' }), year: 2024, rackKg: 900, domain: 8, volts: '415 V AC whips',
+    use: 'Memory-capacity inference — 256 GB HBM3E per GPU, air-cooled' },
+  { key: 'mi300x', label: 'Instinct MI300X (2024)',      gpusPerRack: 32, kwRack: 38,  cooling: 'air',    rackId: 'RCK-002',
+    builder: () => B.buildHGXRack('RCK-002', { liquid: false, accent: '#e0442e' }), year: 2024, rackKg: 850, domain: 8, volts: '415 V AC whips',
+    use: 'LLM serving at max memory per dollar — the inference-fleet chip' },
 ];
 
 /* ---------------- 77 N Ave & Niles — 30 MW industrial retrofit ----------------
@@ -85,13 +105,18 @@ const FT = 0.3048;
 export function siteVersionConfig(chipKey) {
   const chip = CHIP_OPTIONS.find(c => c.key === chipKey) ?? CHIP_OPTIONS[0];
   const s = SITE_77N;
-  const itBudgetKW = s.criticalITMW * 1000;
-  const racksPerRow = 22;
-  const rows = Math.max(2, Math.floor(Math.floor(itBudgetKW / chip.kwRack) / racksPerRow));
-  const racksNominal = rows * racksPerRow;
-  const itKW = racksNominal * chip.kwRack;               // deployed IT at this version
   const liquid = chip.cooling === 'liquid';
-  const pue = liquid ? 1.15 : 1.32;
+  const pueSized = liquid ? 1.15 : 1.32;
+  // deployable IT is the LESSER of the critical-IT budget and what the 30 MW
+  // interconnect can feed at this platform's PUE — air versions pay a GPU tax
+  const itBudgetKW = Math.min(s.criticalITMW * 1000, Math.floor(s.utilityMW * 1000 / pueSized));
+  const racksPerRow = 22;                                 // slots per row
+  const inRowEvery = liquid ? 0 : 5;                      // air: an in-row cooler every 5th slot
+  const racksEff = inRowEvery ? racksPerRow - Math.floor(racksPerRow / inRowEvery) : racksPerRow;
+  const rows = Math.max(2, Math.floor(Math.floor(itBudgetKW / chip.kwRack) / racksEff));
+  const racksNominal = rows * racksEff;
+  const itKW = racksNominal * chip.kwRack;               // deployed IT at this version
+  const pue = pueSized;
   const gpus = racksNominal * chip.gpusPerRack;
 
   // plant sized N+1 from THIS version's load (not fixed counts)
@@ -109,15 +134,16 @@ export function siteVersionConfig(chipKey) {
     blurb: `<b>${s.name} · ${chip.label}.</b> ${s.grossSF.toLocaleString()} SF industrial retrofit —
       3 halls, 50×50 ft bays, corner offices, 13 retained dock doors. ${s.utilityMW} MW utility /
       ${s.criticalITMW} MW critical IT → <b>${racksNominal.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b>
-      at ${chip.kwRack} kW/rack. Plant sized to this platform: ${heatUnits}× 1 MW heat rejection (N+1),
-      ${genCount}× 3 MW gensets (N+1)${liquid ? '' : `, ${crahNeed} CRAH equivalents`}, PUE ${pue}.
+      at ${chip.kwRack} kW/rack. <b>Usage:</b> ${chip.use}. <b>Physical:</b> ${chip.rackKg} kg/rack,
+      ${chip.domain}-GPU scale-up domain, ${chip.volts}${liquid ? ', hot-aisle contained DLC' : ', cold-aisle contained air + in-row coolers'}.
+      Plant sized to this platform: ${heatUnits}× 1 MW heat rejection (N+1), ${genCount}× 3 MW gensets (N+1)${liquid ? '' : `, ${crahNeed} CRAH equivalents`}, PUE ${pue}.
       <i>Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from gross SF — edit below to
       match the survey.</i>`,
     podName: 'ROW',
     cooling: chip.cooling,
     basePUE: pue,
     rows: {
-      count: rows, racksPerRow, rackId: chip.rackId,
+      count: rows, racksPerRow, rackId: chip.rackId, inRowEvery,
       kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
     },
     floors: 1,

@@ -181,9 +181,17 @@ export function buildRackEnclosure(id, { fillRU = 0.75, doorOpen = false } = {})
   return tag(g, id);
 }
 
+// per-accent material cache (vendor tint for switch trays / badge stripes)
+const accentMats = new Map();
+function accentMat(hex) {
+  if (!accentMats.has(hex)) accentMats.set(hex, new THREE.MeshStandardMaterial({ color: hex, roughness: 0.45, metalness: 0.6, emissive: hex, emissiveIntensity: 0.15 }));
+  return accentMats.get(hex);
+}
+
 // NVIDIA GB200/GB300 NVL72 rack-scale system (RCK-004/005): built per ASM-001 —
 // 18 compute trays (9+9), 9 NVSwitch trays center, 8 power shelves top/bottom.
-export function buildNVL72(id = 'RCK-004') {
+// accent: vendor identity for the switch band (NVIDIA green / AMD red / Rubin violet).
+export function buildNVL72(id = 'RCK-004', { accent = null } = {}) {
   const { w, d, h } = dims(id);
   const g = new THREE.Group();
   const frameMat = mats.rackFrame();
@@ -215,7 +223,7 @@ export function buildNVL72(id = 'RCK-004') {
   for (let i = 0; i < 4; i++) stack.push('pwr');
 
   for (const kind of stack) {
-    const mat = kind === 'cmp' ? mats.nvidiaTray() : kind === 'nvs' ? mats.nvSwitch() : mats.powerShelf();
+    const mat = kind === 'cmp' ? mats.nvidiaTray() : kind === 'nvs' ? (accent ? accentMat(accent) : mats.nvSwitch()) : mats.powerShelf();
     const tray = box(bayW, ouH - 0.006, trayD, mat);
     tray.position.set(0, y + ouH / 2, 0.01);
     g.add(tray);
@@ -233,6 +241,72 @@ export function buildNVL72(id = 'RCK-004') {
   manifoldR.position.x = w / 2 - 0.08;
   g.add(manifoldR);
 
+  return tag(g, id);
+}
+
+// HGX/UBB node rack: N × 8-GPU server chassis (DGX/HGX/Instinct class) in a
+// standard enclosure, ToR switches on top, PDU strip — the physical opposite of a
+// rack-scale system: fat 6-10U nodes, not 1U trays. liquid=true adds rear
+// blind-mate manifolds + rear-door HX slab (DLC retrofit of an air chassis).
+export function buildHGXRack(id = 'RCK-003', { nodes = 4, liquid = false, accent = '#76b900' } = {}) {
+  const { w, d, h } = dims(id);
+  const g = new THREE.Group();
+  const frameMat = mats.rackFrame();
+  const t = 0.03;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const post = box(t, h, t, frameMat);
+    post.position.set(sx * (w / 2 - t / 2), h / 2, sz * (d / 2 - t / 2));
+    g.add(post);
+  }
+  const top = box(w, t, d, frameMat); top.position.y = h - t / 2; g.add(top);
+  const bot = box(w, 0.1, d, frameMat); bot.position.y = 0.05; g.add(bot);
+  for (const sx of [-1, 1]) {
+    const side = box(0.012, h - 0.14, d - 0.04, mats.rackDoor());
+    side.position.set(sx * (w / 2 - 0.006), h / 2, 0);
+    g.add(side);
+  }
+
+  const faceW = Math.min(0.4826, w - 0.1);
+  const nodeH = 8 * STD.RU;            // 8U GPU chassis
+  let y = 0.12;
+  // PDU / power shelf at the bottom
+  const pdu = box(faceW, 2 * STD.RU, d - 0.28, mats.powerShelf());
+  pdu.position.set(0, y + STD.RU, -0.02); g.add(pdu);
+  ledStrip(pdu, 0.3, 0, (d - 0.28) / 2 + 0.004, 3, blinkMats);
+  y += 2 * STD.RU + 0.02;
+  // N fat GPU nodes with vendor accent bar
+  for (let n = 0; n < nodes; n++) {
+    const chassis = box(faceW, nodeH - 0.01, d - 0.24, mats.serverFace());
+    chassis.position.set(0, y + nodeH / 2, -0.02);
+    g.add(chassis);
+    const bar = box(faceW - 0.04, 0.02, 0.012, accentMat(accent));
+    bar.position.set(0, y + nodeH - 0.05, (d - 0.24) / 2 - 0.014);
+    g.add(bar);
+    ledStrip(chassis, 0.3, -nodeH / 4, (d - 0.24) / 2 + 0.004, 4, blinkMats);
+    y += nodeH + 0.015;
+  }
+  // ToR switch pair at top
+  for (let sIdx = 0; sIdx < 2; sIdx++) {
+    const tor = box(faceW, STD.RU - 0.006, d - 0.3, mats.rackDoor());
+    tor.position.set(0, y + STD.RU / 2, -0.02);
+    g.add(tor);
+    ledStrip(tor, 0.35, 0, (d - 0.3) / 2 + 0.004, 6, [blinkMats[1]]);
+    y += STD.RU;
+  }
+
+  if (liquid) {
+    // DLC retrofit: rear manifolds + rear-door HX slab
+    const mS = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, h - 0.35, 10), mats.pipeSupply());
+    mS.position.set(-w / 2 + 0.07, h / 2, -d / 2 + 0.05); g.add(mS);
+    const mR = mS.clone(); mR.material = mats.pipeReturn(); mR.position.x = w / 2 - 0.07; g.add(mR);
+    const rdhx = box(w - 0.04, h - 0.2, 0.05, mats.cdu());
+    rdhx.position.set(0, h / 2, -d / 2 - 0.035); g.add(rdhx);
+  } else {
+    const rear = box(w - 0.02, h - 0.14, 0.014, mats.rackMesh());
+    rear.position.set(0, h / 2, -d / 2 + 0.007); g.add(rear);
+  }
+  const front = box(w - 0.02, h - 0.14, 0.014, mats.rackMesh());
+  front.position.set(0, h / 2, d / 2 - 0.007); g.add(front);
   return tag(g, id);
 }
 
@@ -291,6 +365,7 @@ export function buildRowCDU(id = 'LCL-002') {
 
 // Liquid-to-air sidecar (LCL-004) / in-row cooler (ACL-001) share a form factor
 export function buildInRowCooler(id) {
+  { const p = buildFromParts(id); if (p) return p.group; }
   const { w, d, h } = dims(id);
   const g = new THREE.Group();
   const body = box(w, h, d, mats.crah());

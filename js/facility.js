@@ -368,6 +368,14 @@ export function buildFacility(scene, cfg, flows) {
         for (let i = 0; i < racksPerRow; i++) {
           const rx = -rowLen / 2 + rackW * (i + 0.5);
           if (rackBlocked(rx, zRow)) continue;  // leave a gap at columns / offices
+          // air-cooled high-density rows interleave in-row coolers every Nth slot
+          if (cfg.rows.inRowEvery && (i + 1) % cfg.rows.inRowEvery === 0) {
+            const irc = B.buildInRowCooler('ACL-001');
+            irc.position.set(rx, yOff, zRow);
+            if (facing < 0) irc.rotation.y = Math.PI;
+            addPick(irc);
+            continue;
+          }
           const rack = protoRack.clone();
           rack.userData = { ...protoRack.userData };
           rack.position.set(rx, yOff, zRow);
