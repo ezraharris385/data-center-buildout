@@ -170,10 +170,10 @@ export function commercialKeys(facility, cfg) {
       dur: 3.4,
       caption: { kicker: 'MILLIMETER-ACCURATE', title: 'Real hardware, real dimensions.', sub: 'GB200 NVL72 to the fuel farm — 61 manufacturer SKUs' },
     },
-    { // dolly down the aisle
-      pos: V(a.rowLen / 2 + 2.2, 1.55, aisleZ),
-      target: V(a.rowLen / 2 + 9, 1.25, aisleZ),
-      dur: 4.0,
+    { // dolly THROUGH the aisle — stay inside, always facing down the row
+      pos: V(a.rowLen / 2 - 3, 1.55, aisleZ),
+      target: V(a.rowLen / 2 + 8, 1.2, aisleZ),
+      dur: 3.6,
       caption: null,
     },
     { // grid-failure beat — rise out toward the genset line as backup power ignites
