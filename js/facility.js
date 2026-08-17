@@ -7,9 +7,9 @@
 //   Equipment yard:                 z ∈ [-grayD - yardD, -grayD]
 // Multi-floor: white space repeats on each level at y = floor * floorH.
 import * as THREE from 'three';
-import { STD, dims, comp, kw } from './catalog.js';
-import { mats, blinkMats } from './materials.js';
-import * as B from './builders.js';
+import { STD, dims, comp, kw } from './catalog.js?b36';
+import { mats, blinkMats } from './materials.js?b36';
+import * as B from './builders.js?b36';
 
 /* ---------- canvas label sprite ---------- */
 function makeLabel(text, { size = 44, color = '#9fc9e8', sub = null } = {}) {
@@ -128,6 +128,33 @@ export function buildFacility(scene, cfg, flows) {
     const f = new THREE.Mesh(new THREE.BoxGeometry(w, fenceH, d), fenceMat);
     f.position.set(x, fenceH / 2, z);
     root.add(f);
+  }
+
+  /* ---------------- parcel boundary (measured sites) ---------------- */
+  if (cfg.parcel) {
+    const FT = 0.3048;
+    const pw = cfg.parcel.w_ft * FT, pd = cfg.parcel.d_ft * FT;
+    const pcx = (cfg.parcel.dx_ft ?? 0) * FT;
+    const pcz = (hallD - grayD) / 2 + (cfg.parcel.dz_ft ?? 0) * FT;
+    const pts = [
+      new THREE.Vector3(pcx - pw / 2, 0.06, pcz - pd / 2),
+      new THREE.Vector3(pcx + pw / 2, 0.06, pcz - pd / 2),
+      new THREE.Vector3(pcx + pw / 2, 0.06, pcz + pd / 2),
+      new THREE.Vector3(pcx - pw / 2, 0.06, pcz + pd / 2),
+      new THREE.Vector3(pcx - pw / 2, 0.06, pcz - pd / 2),
+    ];
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: 0xffc233, transparent: true, opacity: 0.9 }));
+    root.add(line);
+    for (const c2 of pts.slice(0, 4)) {                    // corner pins
+      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.4, 6), mats.busway());
+      pin.position.set(c2.x, 0.7, c2.z);
+      root.add(pin);
+    }
+    const l = makeLabel(`PARCEL — ${cfg.parcel.acres} AC (MEASURED)`, { size: 24, color: '#ffc233' });
+    l.position.set(pcx, 3.4, pcz + pd / 2);
+    root.add(l); layers.labels.push(l);
   }
 
   /* ---------------- building shell ---------------- */

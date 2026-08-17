@@ -1,8 +1,8 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js';
-import { comp, kw } from './catalog.js';
+import * as B from './builders.js?b36';
+import { comp, kw } from './catalog.js?b36';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
@@ -48,12 +48,31 @@ export const CHIP_OPTIONS = [
    generators N+1 36 MW, UPS 30 MW. Layout directives: demising wall every 1/3,
    office in each corner, 50×50 ft column bays. */
 export const SITE_77N = {
-  name: '77 N Ave & Niles',
+  key: '77n', name: '77 N Ave & Niles',
   buildingW_ft: 271, buildingD_ft: 500, clearH_ft: 32,
   grossSF: 135650, officeSF: 5160,
   utilityMW: 30, criticalITMW: 24, designPUE: 1.25,
   genMW: 36, upsMW: 30, halls: 3, columnFt: 50,
+  dockDoors: 13, driveIns: 2, grayD: 10,
+  footprintAssumed: true,
 };
+
+/* Lehigh Ave building — MEASURED from the user's Google Earth KMZs (building +
+   parcel polygons). Footprint ≈ 126×123 ft irregular, 12,109 SF, on a 0.59-acre
+   parcel (224×121 ft). NOTE: this is ~11× smaller than the 30 MW workbook shell —
+   space, not power, binds this site. Power program assumed = same 30 MW study. */
+export const SITE_LEHIGH = {
+  key: 'lehigh', name: 'Lehigh Ave (measured)',
+  buildingW_ft: 126, buildingD_ft: 123, clearH_ft: 28,
+  grossSF: 12109, officeSF: 0,
+  utilityMW: 30, criticalITMW: 24, designPUE: 1.25,
+  genMW: 36, upsMW: 30, halls: 1, columnFt: 0,
+  dockDoors: 2, driveIns: 0, grayD: 6,
+  parcel: { w_ft: 224, d_ft: 121, dx_ft: -20, dz_ft: 15, acres: 0.59 },
+  measured: true,
+};
+
+export const SITES = { '77n': SITE_77N, 'lehigh': SITE_LEHIGH };
 
 export const RACK_OPTIONS = [
   { id: 'RCK-004', label: 'NVIDIA GB200 NVL72 · 120 kW · liquid', cooling: 'liquid', kw: 120, builder: () => B.buildNVL72('RCK-004') },
@@ -100,9 +119,10 @@ export const custom = {
 
 const FT = 0.3048;
 
-// shared sizing math: what this chip deploys inside the 77N confines
-export function versionStats(chip) {
-  const s = SITE_77N;
+export function activeSite() { return SITES[custom.site] ?? SITE_77N; }
+
+// shared sizing math: what this chip deploys inside the active site's confines
+export function versionStats(chip, s = activeSite()) {
   const liquid = chip.cooling === 'liquid';
   const pue = liquid ? 1.15 : 1.32;
   const itBudgetKW = Math.floor(Math.min(s.utilityMW * 1000 / pue, s.upsMW * 1000));
@@ -119,7 +139,7 @@ export function versionStats(chip) {
 // actual load, so operational performance tracks the compute choice 1:1.
 export function siteVersionConfig(chipKey) {
   const chip = CHIP_OPTIONS.find(c => c.key === chipKey) ?? CHIP_OPTIONS[0];
-  const s = SITE_77N;
+  const s = activeSite();
   // OPTIMIZED sizing: deployable IT = what the confines allow —
   //   min( 30 MW utility ÷ platform PUE , 30 MW UPS budget ).
   // The workbook's 24 MW critical IT assumed PUE 1.25; efficient liquid plants
@@ -147,16 +167,26 @@ export function siteVersionConfig(chipKey) {
   const chillRows = Math.ceil(heatUnits / 6);
   const yardD = 18 + Math.max(genCount * 0 + 14, 14) + chillRows * 5.2;
 
+  // footprint: 77N is slider-driven (assumed split); Lehigh is fixed (measured KMZ)
+  const wFt = s.footprintAssumed ? custom.siteW_ft : s.buildingW_ft;
+  const dFt = s.footprintAssumed ? custom.siteD_ft : s.buildingD_ft;
+  const small = s.grossSF < 20000;                        // compact gray room for small shells
+
+  const footNote = s.measured
+    ? `<i>Footprint ${s.buildingW_ft}×${s.buildingD_ft} ft measured from your KMZ (${s.grossSF.toLocaleString()} SF on a
+       ${s.parcel.acres} ac parcel). Note: the 30 MW workbook describes a 135,650 SF shell — this building is ~11×
+       smaller, so <b>space and yard area bind before power</b>.</i>`
+    : `<i>Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from gross SF — edit below to match the survey.</i>`;
+
   return {
     title: `${s.name} — ${chip.label}`,
     blurb: `<b>${s.name} · ${chip.label}.</b> ${s.grossSF.toLocaleString()} SF industrial retrofit —
-      3 halls, 50×50 ft bays, corner offices, 13 retained dock doors. <b>Optimized:</b> ${s.utilityMW} MW feed
-      ÷ PUE ${pue} → <b>${racksNominal.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b> at
+      ${s.halls > 1 ? `${s.halls} halls, ` : ''}${s.columnFt ? `${s.columnFt}×${s.columnFt} ft bays, ` : ''}${s.officeSF ? 'corner offices, ' : ''}${s.dockDoors} retained dock doors.
+      <b>Optimized:</b> ${s.utilityMW} MW feed ÷ PUE ${pue} → <b>${racksNominal.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b> at
       ${chip.kwRack} kW/rack (workbook baseline: ${s.criticalITMW} MW @ PUE ${s.designPUE}). <b>Usage:</b> ${chip.use}. <b>Physical:</b> ${chip.rackKg} kg/rack,
       ${chip.domain}-GPU scale-up domain, ${chip.volts}${liquid ? ', hot-aisle contained DLC' : ', cold-aisle contained air + in-row coolers'}.
       Plant sized to this platform: ${heatUnits}× 1 MW heat rejection (N+1), ${genCount}× 3 MW gensets (N+1)${liquid ? '' : `, ${crahNeed} CRAH equivalents`}, PUE ${pue}.
-      <i>Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from gross SF — edit below to
-      match the survey.</i>`,
+      ${footNote}`,
     podName: 'ROW',
     cooling: chip.cooling,
     basePUE: pue,
@@ -164,21 +194,27 @@ export function siteVersionConfig(chipKey) {
       count: rows, racksPerRow, rackId: chip.rackId, inRowEvery, egressEvery,
       maxRacks, kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
     },
-    balanceHalls: true,
+    balanceHalls: s.halls > 1,
     floors: 1,
     wallH: s.clearH_ft * FT * 0.55,
     shell: custom.shell,                                   // solid / glass / open — user-controlled
-    building: { w: custom.siteW_ft * FT, d: custom.siteD_ft * FT },
+    building: { w: wFt * FT, d: dFt * FT },
     halls: s.halls,
-    columnGrid: s.columnFt * FT,
-    officeCornerSF: s.officeSF / 4,
-    dockDoors: 13,                                        // per CapEx budget: 13 dock doors installed
-    driveIns: 2,                                          // 2 existing drive-ins converted
-    grayD: 10,
+    columnGrid: s.columnFt ? s.columnFt * FT : 0,
+    officeCornerSF: s.officeSF ? s.officeSF / 4 : 0,
+    dockDoors: s.dockDoors,
+    driveIns: s.driveIns,
+    parcel: s.parcel ?? null,
+    grayD: s.grayD,
     yardD,
-    crahCount: liquid ? 0 : Math.min(crahNeed, 14),       // wall space caps the drawable count
-    include: { busB: true, trays: true, pdus: true, crah: !liquid, containment: true },
-    gray: [
+    crahCount: liquid ? 0 : Math.min(crahNeed, small ? 6 : 14),
+    include: { busB: true, trays: true, pdus: !small, crah: !liquid, containment: true },
+    gray: small ? [
+      { id: 'ELC-006', count: 1, opts: { sections: 3 } },
+      { id: 'ELC-001', count: Math.min(upsLineups, 2) },
+      { id: 'ELC-005', count: Math.min(battCabinets, 4) },
+      { id: 'ELC-010', count: 1 },
+    ] : [
       { id: 'ELC-007', count: 1, opts: { sections: 3 } },
       { id: 'ELC-001', count: Math.min(upsLineups, 4) },
       { id: 'ELC-005', count: Math.min(battCabinets, 8) },
@@ -187,17 +223,19 @@ export function siteVersionConfig(chipKey) {
       { id: 'ELC-006', count: 1, opts: { sections: 3 } },
     ],
     yard: {
-      transformers: 2,
-      gensets: { id: 'BKP-003', count: Math.min(genCount, 14) },
-      chillers: { id: liquid ? 'MEC-005' : 'MEC-001', count: Math.min(heatUnits, 26) },
-      tower: false, tes: false, fuel: 2,
+      transformers: small ? 1 : 2,
+      gensets: { id: 'BKP-003', count: Math.min(genCount, small ? 5 : 14) },
+      chillers: { id: liquid ? 'MEC-005' : 'MEC-001', count: Math.min(heatUnits, small ? 6 : 26) },
+      tower: false, tes: false, fuel: small ? 1 : 2,
     },
     siteOverrides: {
-      upsKW: s.upsMW * 1000, genKW: Math.min(genCount, 14) * 3000,
+      siteName: s.name, grossSF: s.grossSF, officeSF: s.officeSF, halls: s.halls,
+      upsKW: s.upsMW * 1000, genKW: Math.min(genCount, small ? 5 : 14) * 3000,
       utilityKW: s.utilityMW * 1000, designPUE: s.designPUE,
       tfKW: s.utilityMW * 1000,
       battCabinets, crahNeed: liquid ? 0 : crahNeed,
-      heatUnits, footprintAssumed: true,
+      heatUnits, footprintAssumed: !!s.footprintAssumed,
+      measured: !!s.measured, parcelAc: s.parcel?.acres ?? null,
     },
     tourRackLine: `${chip.label} racks`,
     chip,
@@ -205,7 +243,7 @@ export function siteVersionConfig(chipKey) {
 }
 
 export function customConfig() {
-  if (custom.site === '77n') return siteVersionConfig(custom.chip);
+  if (custom.site !== 'free') return siteVersionConfig(custom.chip);
   const rack = RACK_OPTIONS.find(r => r.id === custom.rack);
   const cooling = custom.cooling === 'auto' ? rack.cooling : custom.cooling;
   const kwRack = custom.kwPerRack ?? rack.kw;
@@ -265,6 +303,7 @@ export function initBuilder(onChange) {
       <select id="bldSite">
         <option value="free" ${custom.site === 'free' ? 'selected' : ''}>Freeform sandbox</option>
         <option value="77n" ${custom.site === '77n' ? 'selected' : ''}>77 N Ave &amp; Niles — 30 MW retrofit</option>
+        <option value="lehigh" ${custom.site === 'lehigh' ? 'selected' : ''}>Lehigh Ave — measured from KMZ</option>
       </select>
       <div class="bld-label">Compute platform</div>
       <select id="bldChip">${CHIP_OPTIONS.map(c =>
@@ -343,7 +382,7 @@ export function initBuilder(onChange) {
       <thead><tr><th>Platform</th><th>Racks</th><th>GPUs</th><th>IT MW</th><th>PUE</th></tr></thead>
       <tbody>${CHIP_OPTIONS.map(c => {
         const v = versionStats(c);
-        return `<tr data-chip="${c.key}" class="${c.key === custom.chip && custom.site === '77n' ? 'sel' : ''}">
+        return `<tr data-chip="${c.key}" class="${c.key === custom.chip && custom.site !== 'free' ? 'sel' : ''}">
           <td>${c.label.split(' (')[0]}</td><td>${v.maxRacks.toLocaleString()}</td>
           <td>${v.gpus.toLocaleString()}</td><td>${(v.itKW / 1000).toFixed(1)}</td><td>${v.pue}</td></tr>`;
       }).join('')}</tbody></table>`;
@@ -354,8 +393,8 @@ export function initBuilder(onChange) {
   // this is what makes "flip through the chips" visibly rebuild everything
   function activateChip(key) {
     custom.chip = key;
-    custom.site = '77n';
-    document.getElementById('bldSite').value = '77n';
+    if (custom.site === 'free') custom.site = '77n';   // keep Lehigh if it's the active site
+    document.getElementById('bldSite').value = custom.site;
     document.getElementById('bldChip').value = key;
     renderVersionTable();
     onChange();

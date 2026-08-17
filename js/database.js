@@ -2,8 +2,8 @@
 // filterable, with a live 3D preview of the selected component.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { allComponents, comp, dims } from './catalog.js';
-import * as B from './builders.js';
+import { allComponents, comp, dims } from './catalog.js?b36';
+import * as B from './builders.js?b36';
 
 let previewRenderer = null, previewScene = null, previewCamera = null, previewControls = null;
 let previewGroup = null, previewTimer = null;

@@ -4,8 +4,8 @@
 //      (capacity, redundancy, runtime, PUE) — always available, no network.
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
-import { comp, kw } from './catalog.js';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js';
+import { comp, kw } from './catalog.js?b36';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b36';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
@@ -24,9 +24,23 @@ export function analyze(cfg, stats) {
   /* ----- site mode: verify against the underwriting workbook ----- */
   if (site) {
     const util = site.utilityKW;
-    ok(`${SITE_77N.name}: ${SITE_77N.grossSF.toLocaleString()} SF shell, 3 halls, 50×50 ft bays, ` +
-       `${stats.whiteSpacePct}% white space (offices ${SITE_77N.officeSF.toLocaleString()} SF in 4 corners).`);
+    ok(`${site.siteName}: ${site.grossSF.toLocaleString()} SF shell, ${site.halls > 1 ? site.halls + ' halls, ' : 'single hall, '}` +
+       `${stats.whiteSpacePct}% white space${site.officeSF ? ` (offices ${site.officeSF.toLocaleString()} SF in 4 corners)` : ''}.`);
     if (stats.gpus) ok(`${stats.racks.toLocaleString()} racks placed → ${stats.gpus.toLocaleString()} GPUs at ${stats.kwPerRack} kW/rack.`);
+
+    // space-vs-power binding: did the shell absorb the full power-limited build?
+    if (cfg.rows.maxRacks && stats.racks < cfg.rows.maxRacks * 0.98) {
+      const lostKW = (cfg.rows.maxRacks - stats.racks) * stats.kwPerRack;
+      bad(`SPACE-LIMITED: the shell fits ${stats.racks.toLocaleString()} of ${cfg.rows.maxRacks.toLocaleString()} power-supported racks — ` +
+          `${fmt(lostKW)} of feed capacity is stranded. This building binds on floor area, not the interconnect.`);
+    }
+    const wsf = Math.round(itKW * 1000 / site.grossSF);
+    if (wsf > 1500) warn(`Power density ${wsf} W/sf gross — beyond today's typical retrofit ceiling (~600–1,500 W/sf). Physically placeable with rack-scale DLC, but structure, risers, and yard become the fight.`);
+    else ok(`Power density ${wsf} W/sf gross — within retrofit norms.`);
+    if (site.parcelAc && site.parcelAc < 1.5) {
+      warn(`Parcel is ${site.parcelAc} ac — the N+1 yard plant drawn here overruns the property line (see the amber boundary). ` +
+           `Real fit-out needs rooftop plant, stacked gensets, or offsite capacity.`);
+    }
 
     // PUE verification: design 1.25 vs cooling-implied
     for (const [label, p] of [['Liquid (DLC)', 1.15], ['Design (workbook)', site.designPUE], ['Air-cooled', 1.32]]) {
@@ -39,10 +53,10 @@ export function analyze(cfg, stats) {
     else ok(`This build: ${fmt(itKW)} IT × PUE ${pue} = ${fmt(itKW * pue)} — inside the ${fmt(util)} feed.`);
 
     // optimization report — how the confines were used
-    const baseIT = SITE_77N.criticalITMW * 1000;
+    const baseIT = 24000;   // workbook critical-IT baseline
     if (itKW > baseIT * 1.005) ok(`Optimized sizing: at PUE ${pue} the same feed carries ${fmt(itKW)} IT vs the workbook's ${fmt(baseIT)} (sized at PUE ${site.designPUE}) — the efficiency gap converts to ~${(stats.gpus - Math.floor(baseIT / stats.kwPerRack) * (cfg.chip?.gpusPerRack ?? 0)).toLocaleString()} extra GPUs.`);
     else if (itKW < baseIT * 0.995) warn(`Air-platform tax: PUE ${pue} caps deployable IT at ${fmt(itKW)} vs the ${fmt(baseIT)} baseline — the interconnect, not the floor, binds this version.`);
-    if (cfg.rows.maxRacks) ok(`Layout optimization: ${stats.racks.toLocaleString()} of ${cfg.rows.maxRacks.toLocaleString()} power-limited racks placed (${Math.round(stats.racks / cfg.rows.maxRacks * 100)}%) — rows auto-fit to the bay width, nudged off column lines (zero racks lost to columns), egress break every ${cfg.rows.egressEvery} slots, balanced across ${SITE_77N.halls} halls.`);
+    if (cfg.rows.maxRacks) ok(`Layout optimization: ${stats.racks.toLocaleString()} of ${cfg.rows.maxRacks.toLocaleString()} power-limited racks placed (${Math.round(stats.racks / cfg.rows.maxRacks * 100)}%) — rows auto-fit to the bay width, nudged off column lines (zero racks lost to columns), egress break every ${cfg.rows.egressEvery} slots${site.halls > 1 ? `, balanced across ${site.halls} halls` : ''}.`);
 
     // power chain from the workbook budget
     if (site.upsKW < itKW) bad(`UPS budget ${fmt(site.upsKW)} < IT load ${fmt(itKW)}.`);
@@ -70,7 +84,8 @@ export function analyze(cfg, stats) {
       ok(`Usage profile: ${chip.use}.`);
       if (!cfg.cooling.includes('liquid') && cfg.rows.inRowEvery) ok(`Air fit-out: in-row coolers every ${cfg.rows.inRowEvery}th slot + cold-aisle containment (visible in the rows) carry the load the perimeter CRAHs can't.`);
     }
-    if (site.footprintAssumed) warn(`Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from 135,650 SF gross — confirm against survey/ALTA before layout decisions.`);
+    if (site.footprintAssumed) warn(`Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from ${site.grossSF.toLocaleString()} SF gross — confirm against survey/ALTA before layout decisions.`);
+      else if (site.measured) ok(`Footprint measured from your Google Earth polygons — ${site.grossSF.toLocaleString()} SF building on a ${site.parcelAc} ac parcel. No footprint assumptions remain.`);
 
     // AMD max-fit: the 50 MW question
     const amd = CHIP_OPTIONS.filter(c => c.key.startsWith('mi'));
@@ -82,7 +97,7 @@ export function analyze(cfg, stats) {
       warn(`${c.label}: ${racksAtSite.toLocaleString()} racks (${(racksAtSite * c.gpusPerRack).toLocaleString()} GPUs) at today's ${fmt(itKW)} IT. ` +
            `At 50 MW IT: ${racks50.toLocaleString()} racks (${(racks50 * c.gpusPerRack).toLocaleString()} GPUs) — ` +
            `space ${spaceOK ? 'fits' : `EXCEEDS shell (~${stats.spaceCapRacks.toLocaleString()} rack cap)`}; ` +
-           `needs ~${fmt(util50)} utility (${(util50 / 1000 - SITE_77N.utilityMW).toFixed(1)} MW above today's feed).`);
+           `needs ~${fmt(util50)} utility (${(util50 / 1000 - site.utilityKW / 1000).toFixed(1)} MW above today's feed).`);
     }
     const score2 = f.some(x => x.level === 'bad') ? 'BLOCKED' : 'SOUND';
     return { findings: f, score: score2, itKW, totalKW, pue };

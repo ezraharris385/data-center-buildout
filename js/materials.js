@@ -63,7 +63,7 @@ export const mats = {
 
   crah: () => std('crah', { color: 0x8f98a5, roughness: 0.55, metalness: 0.3 }),
   crahDark: () => std('crahDark', { color: 0x353b46, roughness: 0.5, metalness: 0.4 }),
-  cdu: () => std('cdu', { color: 0x2b4a5e, roughness: 0.45, metalness: 0.55 }),
+  cdu: () => std('cdu', { color: 0x2e3238, roughness: 0.5, metalness: 0.55 }),
   pdu: () => std('pdu', { color: 0x3a4048, roughness: 0.5, metalness: 0.5 }),
 
   busway: () => std('busway', { color: 0x8a6d1f, roughness: 0.4, metalness: 0.7 }),
@@ -72,7 +72,7 @@ export const mats = {
   fiberDuct: () => std('fiberDuct', { color: 0xb8860b, roughness: 0.5, metalness: 0.2 }),
   pipeSupply: () => std('pipeSupply', { color: 0x1f6a8a, roughness: 0.35, metalness: 0.6 }),
   pipeReturn: () => std('pipeReturn', { color: 0x8a4a2a, roughness: 0.35, metalness: 0.6 }),
-  containGlass: () => std('containGlass', { color: 0x7fd4ff, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }),
+  containGlass: () => std('containGlass', { color: 0xe8eef4, roughness: 0.08, metalness: 0.05, transparent: true, opacity: 0.045, side: THREE.DoubleSide, depthWrite: false }),
   containFrame: () => std('containFrame', { color: 0x2c323c, roughness: 0.5, metalness: 0.6 }),
 
   // emissives

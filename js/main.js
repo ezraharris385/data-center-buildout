@@ -7,17 +7,17 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js';
-import { animateBlink } from './materials.js';
-import { FlowSystem } from './flows.js';
-import { buildFacility } from './facility.js';
-import { SCENES } from './scenes.js';
-import { Choreographer, cinematicKeys, TourRecorder } from './tour.js';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js';
-import { initDatabase, setDatabaseVisible } from './database.js';
-import { customConfig, initBuilder } from './custom.js';
-import { initAgent } from './agent.js';
-import * as UI from './ui.js';
+import { loadCatalog, comp } from './catalog.js?b36';
+import { animateBlink } from './materials.js?b36';
+import { FlowSystem } from './flows.js?b36';
+import { buildFacility } from './facility.js?b36';
+import { SCENES } from './scenes.js?b36';
+import { Choreographer, cinematicKeys, TourRecorder } from './tour.js?b36';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b36';
+import { initDatabase, setDatabaseVisible } from './database.js?b36';
+import { customConfig, initBuilder } from './custom.js?b36';
+import { initAgent } from './agent.js?b36';
+import * as UI from './ui.js?b36';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
