@@ -120,8 +120,15 @@ function build3D(cfg) {
   facility = buildFacility(scene, cfg, flows);
   flows.setUtility(true);
   flows.setLoad(state.load);
-  if (cfg.shell === 'open') { toggles.roof = false; document.getElementById('tglRoof').checked = false; }
-  else if (cfg.building) { toggles.roof = true; document.getElementById('tglRoof').checked = true; } // real buildings arrive with their shell on
+  // shell defaults apply only until the user touches the roof toggle themselves —
+  // after that, their choice survives every rebuild/chip switch
+  if (roofAuto) {
+    toggles.roof = cfg.shell === 'open' ? false : !!cfg.building;
+    document.getElementById('tglRoof').checked = toggles.roof;
+  } else if (cfg.shell === 'open') {
+    toggles.roof = false;
+    document.getElementById('tglRoof').checked = false;
+  }
   applyToggles();
   UI.setBlurb(cfg.blurb);
 
@@ -160,6 +167,7 @@ function rebuildCustom() {
 
 /* ---------------- toggles ---------------- */
 const toggles = { roof: false, containment: true, labels: true, power: true, coolant: true, air: true, heat: true };
+let roofAuto = true;   // false once the user flips the roof toggle themselves
 function applyToggles() {
   if (!facility) return;
   for (const m of facility.layers.roof) m.visible = toggles.roof;
@@ -465,7 +473,7 @@ window.__tour = opts => startCinematic(opts ?? {});
 UI.initUI({
   onScene: key => switchTab(key),
   onCamera: preset => flyTo(preset),
-  onToggle: (name, on) => { toggles[name] = on; applyToggles(); },
+  onToggle: (name, on) => { if (name === 'roof') roofAuto = false; toggles[name] = on; applyToggles(); },
   onLoad: v => { state.load = v; flows?.setLoad(v); updateTelemetry(); },
   onTemp: v => { state.tempF = v; updateTelemetry(); },
   onUtilityToggle: () => state.utilityOn ? failUtility() : restoreUtility(),

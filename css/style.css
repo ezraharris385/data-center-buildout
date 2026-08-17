@@ -319,3 +319,5 @@ body.tour-mode #hintbar, body.tour-mode #flowCard { display: none !important; }
 .ver-table tr.sel { background: rgba(255,194,51,.12); }
 .ver-table tr.sel td:first-child { color: var(--amber); font-weight: 700; }
 .build-tag { font: 400 9px var(--mono); color: rgba(125,142,163,.55); margin-left: 6px; }
+.btn-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.shell-btn.on { color: var(--amber) !important; border-color: var(--amber) !important; background: rgba(255,194,51,.1) !important; }

@@ -167,7 +167,7 @@ export function siteVersionConfig(chipKey) {
     balanceHalls: true,
     floors: 1,
     wallH: s.clearH_ft * FT * 0.55,
-    shell: 'solid',
+    shell: custom.shell,                                   // solid / glass / open — user-controlled
     building: { w: custom.siteW_ft * FT, d: custom.siteD_ft * FT },
     halls: s.halls,
     columnGrid: s.columnFt * FT,
@@ -271,6 +271,12 @@ export function initBuilder(onChange) {
         `<option value="${c.key}" ${c.key === custom.chip ? 'selected' : ''}>${c.label}</option>`).join('')}</select>
       <div class="learn-hint">Picking a chip loads that platform's full buildout — racks, cooling,
       yard plant, and telemetry all re-derive. Click any row below to switch.</div>
+      <div class="bld-label">Shell — see inside</div>
+      <div class="btn-grid btn-grid-3">
+        <button class="shell-btn ${custom.shell === 'solid' ? 'on' : ''}" data-shell="solid">Solid</button>
+        <button class="shell-btn ${custom.shell === 'glass' ? 'on' : ''}" data-shell="glass">Glass</button>
+        <button class="shell-btn ${custom.shell === 'open' ? 'on' : ''}" data-shell="open">Open</button>
+      </div>
       <div id="verTable"></div>
       <div class="ops-row" style="margin-top:10px"><div class="ops-label">Footprint W (ft) <span class="ops-val" id="bldSiteWVal">${custom.siteW_ft}</span></div>
       <input type="range" id="bldSiteW" min="180" max="420" value="${custom.siteW_ft}" step="1"></div>
@@ -358,6 +364,15 @@ export function initBuilder(onChange) {
     const tr = e.target.closest('tr[data-chip]');
     if (tr) activateChip(tr.dataset.chip);
   });
+
+  // shell quick-switch: syncs the freeform SHELL select and rebuilds immediately
+  el.querySelectorAll('.shell-btn').forEach(btn => btn.addEventListener('click', () => {
+    custom.shell = btn.dataset.shell;
+    el.querySelectorAll('.shell-btn').forEach(b => b.classList.toggle('on', b === btn));
+    const sel = document.getElementById('bldShell');
+    if (sel) sel.value = custom.shell;
+    onChange();
+  }));
 
   let deb = null;
   const change = () => { clearTimeout(deb); deb = setTimeout(onChange, 350); };

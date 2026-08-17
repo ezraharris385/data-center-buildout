@@ -180,9 +180,11 @@ export function buildFacility(scene, cfg, flows) {
   const band = new THREE.Mesh(new THREE.BoxGeometry(hallW, 0.9, wallT), mats.wallGlass());
   band.position.set(0, wallH - 0.7, hallD + 0.01);
   root.add(band); layers.roof.push(band);
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(hallW + 0.6, 0.2, bldgD + 0.6), mats.roof());
+  // glass shell = full x-ray: the roof goes transparent with the walls
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(hallW + 0.6, 0.2, bldgD + 0.6),
+    shell === 'glass' ? mats.wallGlass() : mats.roof());
   roof.position.set(0, wallH + 0.1, (hallD - grayD) / 2);
-  roof.castShadow = true;
+  roof.castShadow = shell !== 'glass';
   root.add(roof); layers.roof.push(roof);
 
   const divider = new THREE.Mesh(new THREE.BoxGeometry(hallW, wallH - 0.5, 0.15), mats.wall());
