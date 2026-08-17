@@ -7,9 +7,9 @@
 //   Equipment yard:                 z ∈ [-grayD - yardD, -grayD]
 // Multi-floor: white space repeats on each level at y = floor * floorH.
 import * as THREE from 'three';
-import { STD, dims, comp, kw } from './catalog.js?b36';
-import { mats, blinkMats } from './materials.js?b36';
-import * as B from './builders.js?b36';
+import { STD, dims, comp, kw } from './catalog.js?b37';
+import { mats, blinkMats } from './materials.js?b37';
+import * as B from './builders.js?b37';
 
 /* ---------- canvas label sprite ---------- */
 function makeLabel(text, { size = 44, color = '#9fc9e8', sub = null } = {}) {

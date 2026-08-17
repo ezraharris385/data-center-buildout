@@ -7,17 +7,17 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js?b36';
-import { animateBlink } from './materials.js?b36';
-import { FlowSystem } from './flows.js?b36';
-import { buildFacility } from './facility.js?b36';
-import { SCENES } from './scenes.js?b36';
-import { Choreographer, cinematicKeys, TourRecorder } from './tour.js?b36';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b36';
-import { initDatabase, setDatabaseVisible } from './database.js?b36';
-import { customConfig, initBuilder } from './custom.js?b36';
-import { initAgent } from './agent.js?b36';
-import * as UI from './ui.js?b36';
+import { loadCatalog, comp } from './catalog.js?b37';
+import { animateBlink } from './materials.js?b37';
+import { FlowSystem } from './flows.js?b37';
+import { buildFacility } from './facility.js?b37';
+import { SCENES } from './scenes.js?b37';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b37';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b37';
+import { initDatabase, setDatabaseVisible } from './database.js?b37';
+import { customConfig, initBuilder } from './custom.js?b37';
+import { initAgent } from './agent.js?b37';
+import * as UI from './ui.js?b37';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
@@ -430,7 +430,7 @@ guideOverlay.addEventListener('click', e => {
 });
 
 /* ---------------- cinematic tour + recording ---------------- */
-function startCinematic({ record = false, w = 1920, h = 1080, fps = 60 } = {}) {
+function startCinematic({ record = false, w = 1920, h = 1080, fps = 60, mode = 'cine' } = {}) {
   if (!facility) return;
   document.body.classList.add('tour-mode');
   exitFlow(true);
@@ -449,7 +449,11 @@ function startCinematic({ record = false, w = 1920, h = 1080, fps = 60 } = {}) {
     recorder.start();
   }
 
-  const keys = cinematicKeys(facility, state.cfg);
+  const keys = mode === 'promo' ? commercialKeys(facility, state.cfg) : cinematicKeys(facility, state.cfg);
+  if (mode === 'promo') {
+    // scripted grid-failure beat: hits as the camera rises toward the gensets
+    setTimeout(() => { if (state.utilityOn) failUtility(); }, 11800);
+  }
   choreo.start(keys, {
     onCaption: (cap, dur) => recorder?.setCaption(cap, dur),
     onDone: async () => {
@@ -525,10 +529,11 @@ setTimeout(() => {
   setTimeout(UI.hideLoading, 350);
   animate();
 
-  if (params.get('tour') === 'cine') {
+  const tourMode = params.get('tour');
+  if (tourMode === 'cine' || tourMode === 'promo') {
     const record = params.get('record') === '1';
     const fps = +(params.get('fps') ?? 60);
     // small delay so fonts/first frames settle
-    setTimeout(() => startCinematic({ record, fps }), 1200);
+    setTimeout(() => startCinematic({ record, fps, mode: tourMode }), 1200);
   }
 })();

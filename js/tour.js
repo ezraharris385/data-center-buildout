@@ -134,6 +134,63 @@ export function cinematicKeys(facility, cfg) {
   ];
 }
 
+
+/* ================= Commercial cut (~23 s) ================= */
+// Marketing pacing, not teaching: reveal → systems sweep → aisle dive →
+// grid-failure beat → hero pull-back with end card.
+export function commercialKeys(facility, cfg) {
+  const a = facility.anchors;
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const gen = a.gensets[Math.floor(a.gensets.length / 2)] ?? V(0, 2, -a.grayD - 10);
+  const chill = a.chillers[0] ?? V(0, 1.5, -a.grayD - a.yardD + 6);
+  const aisleZ = a.aisle0;
+
+  return [
+    { // cold open — low, outside the wire, the machine glowing at dusk
+      pos: V(-a.hallW * 1.05, 2.2, -a.grayD - a.yardD - 8),
+      target: V(0, 4, -a.grayD - 6),
+      dur: 0.01,
+      caption: { kicker: 'DATA CENTER BUILDOUT', title: 'See the whole machine.', sub: '' },
+    },
+    { // rising sweep across the yard plant — fans, heat, energy
+      pos: V(a.hallW * 0.55, 10, -a.grayD - a.yardD * 0.55),
+      target: V(chill.x, 1.5, chill.z),
+      dur: 4.2,
+      caption: { kicker: 'LIVE OPERATIONS', title: 'Every system, animated.', sub: 'Power · coolant · airflow · heat — end to end' },
+    },
+    { // swoop toward the hall over gray space
+      pos: V(a.ups.x + 10, 6, -a.grayD + 8),
+      target: V(0, 1.5, a.rows[0]?.z ?? 4),
+      dur: 3.6,
+      caption: null,
+    },
+    { // THE aisle dive — enter low and slow
+      pos: V(-a.rowLen / 2 - 4.5, 1.7, aisleZ),
+      target: V(a.rowLen / 2, 1.1, aisleZ),
+      dur: 3.4,
+      caption: { kicker: 'MILLIMETER-ACCURATE', title: 'Real hardware, real dimensions.', sub: 'GB200 NVL72 to the fuel farm — 61 manufacturer SKUs' },
+    },
+    { // dolly down the aisle
+      pos: V(a.rowLen / 2 + 2.2, 1.55, aisleZ),
+      target: V(a.rowLen / 2 + 9, 1.25, aisleZ),
+      dur: 4.0,
+      caption: null,
+    },
+    { // grid-failure beat — rise out toward the genset line as backup power ignites
+      pos: V(a.hallW * 0.62, 8.5, -a.grayD - 3),
+      target: V(gen.x, 2, gen.z),
+      dur: 4.2,
+      caption: { kicker: 'STRESS-TEST THE SITE', title: 'Fail the grid. Watch it ride through.', sub: 'Batteries bridge · generators start · ATS transfers' },
+    },
+    { // hero pull-back — whole property, flows blazing
+      pos: V(a.hallW * 1.5, a.wallH * 3.6, a.hallD + a.hallW * 1.05),
+      target: V(0, 0, (a.hallD - a.grayD - a.yardD * 0.5) / 2),
+      dur: 5.2,
+      caption: { kicker: 'DATA CENTER BUILDOUT — 3D OPERATIONS STUDIO', title: 'From site to silicon.', sub: 'Site-specific buildouts · chip-level capacity · investor-grade analysis' },
+    },
+  ];
+}
+
 /* ================= Recorder ================= */
 // Composites the WebGL canvas + cinematic titles onto a 2D canvas and records
 // it with MediaRecorder. Produces a downloadable .webm.
