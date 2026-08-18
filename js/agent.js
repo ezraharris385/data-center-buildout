@@ -4,8 +4,8 @@
 //      (capacity, redundancy, runtime, PUE) — always available, no network.
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
-import { comp, kw } from './catalog.js?b39';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b39';
+import { comp, kw, design } from './catalog.js?b40';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b40';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
@@ -77,7 +77,7 @@ export function analyze(cfg, stats) {
       const rc = comp(chip.rackId);
       const fpM2 = (rc.Width_mm / 1000) * (rc.Depth_mm / 1000);
       const psf = Math.round(chip.rackKg / fpM2 * 0.2048);
-      if (psf > 250) warn(`Floor loading: ${chip.rackKg} kg on a ${(fpM2 * 10.764).toFixed(1)} SF footprint ≈ ${psf} psf point load — above typical industrial slab (~250 psf). The budget's 30,000 SF slab reinforcement goes under these rows.`);
+      if (psf > 300) warn(`Floor loading: ${chip.rackKg} kg on a ${(fpM2 * 10.764).toFixed(1)} SF footprint ≈ ${psf} psf — Design Studio flags AI/liquid rows above 300 psf (375 psf recommended slab). The budget's slab reinforcement goes under these rows.`);
       else ok(`Floor loading ≈ ${psf} psf — inside typical industrial slab capacity; reinforcement allowance stays contingency.`);
       ok(`Scale-up domain: ${chip.domain === 72 ? 'one 72-GPU domain per rack — cross-rack traffic is scale-out only, so the fabric is leaf/spine between rows' : '8-GPU nodes — ALL cross-node training traffic rides the scale-out fabric; expect denser ToR/leaf switching per row'}.`);
       ok(`Power delivery: ${chip.volts} — ${chip.volts.includes('48') ? 'rack-scale power shelves on a DC busbar; fewer breakers, busway plug-ins sized per rack' : 'conventional PDU whips from the busway; more branch circuits, standard colo practice'}.`);
@@ -86,6 +86,56 @@ export function analyze(cfg, stats) {
     }
     if (site.footprintAssumed) warn(`Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from ${site.grossSF.toLocaleString()} SF gross — confirm against survey/ALTA before layout decisions.`);
       else if (site.measured) ok(`Footprint measured from your Google Earth polygons — ${site.grossSF.toLocaleString()} SF building on a ${site.parcelAc} ac parcel. No footprint assumptions remain.`);
+
+    /* ----- Design Studio engine: indicative CapEx, annuals, procurement ----- */
+    const eng = design();
+    if (eng) {
+      const cm = eng.costModel;
+      const rate = k => cm[k]?.rate ?? 0;
+      const itMW = itKW / 1000, facMW = itKW * pue / 1000;
+      const wsSF = Math.round(site.grossSF * (stats.whiteSpacePct / 100));
+      // facility hardware BOM (racks excl. silicon + plant), installed at 1.8x
+      const rackBOM = (cfg.chip?.bomCost ?? 90000) * stats.racks;
+      const genB = Math.ceil(facMW / 2 + 1) * 1100000;          // 2 MW T4 class
+      const upsB = Math.ceil(itMW / 5 + 1) * 1250000;           // 5 MW blocks
+      const coolB = Math.ceil(itKW * 1.05 / 2110 + 1) * 320000; // 600-ton adiabatic
+      const cduB = cfg.cooling === 'liquid' ? Math.ceil(itKW / 1350 + 1) * 220000 : 0;
+      const swgrB = 2 * 850000 + Math.ceil(facMW / 3) * 220000; // MV lineups + 3 MVA xfmrs
+      const hwBOM = rackBOM + genB + upsB + coolB + cduB + swgrB;
+      const installed = hwBOM * (rate('Equipment install factor') || 1.8);
+      const perMW = facMW * (rate('Electrical distribution') + rate('Cooling distribution')
+        + rate('Fire protection') + rate('BMS / DCIM controls') + rate('Commissioning')
+        + rate('Security') + rate('Civil / sitework'));
+      const sfCosts = site.grossSF * (rate('Structural reinforcement (retrofit)') || 22)
+        + wsSF * (rate('White-space fit-out') || 180);
+      const lumps = (rate('Right-of-way allowance') || 2000000) + (rate('Zoning / entitlement allowance') || 1500000);
+      const hard = installed + perMW + sfCosts + lumps;
+      const total = hard * (1 + (rate('Soft costs') || 0.095)) * (1 + (rate('Contingency') || 0.1));
+      const perKW = total / itKW;
+      const fmtM = v => v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : `$${(v / 1e6).toFixed(1)}M`;
+      ok(`Indicative facility CapEx (Design Studio rate card): ${fmtM(total)} all-in — ` +
+         `hardware ${fmtM(hwBOM)} installed at 1.8×, ${fmtM(perMW)} MW-driven infrastructure, ` +
+         `${fmtM(sfCosts)} structure/fit-out, +9.5% soft +10% contingency → $${Math.round(perKW).toLocaleString()}/kW IT ` +
+         `(greenfield benchmark ~$13,000/kW).`);
+      if (cfg.chip?.sysCost) warn(`Tenant-side IT systems (incl. silicon): ${fmtM(cfg.chip.sysCost * stats.racks)} ` +
+         `(${stats.racks.toLocaleString()} × ${fmtM(cfg.chip.sysCost)}) — not in the facility CapEx above.`);
+      // annual energy / carbon / water — Chicago metro grid (RFCW, eGRID2023)
+      const gf = eng.gridFactors['RFCW'] ?? eng.gridFactors['US-avg'];
+      const co2kg = gf?.['CO2e (kg/MWh)'] ?? 375;
+      const annMWh = facMW * 8760;
+      ok(`Annuals at full load: ${Math.round(annMWh).toLocaleString()} MWh facility → ` +
+         `${Math.round(annMWh * co2kg / 1000).toLocaleString()} t CO2e on ${gf?.Label ?? 'US avg'} grid ` +
+         `(${co2kg} kg/MWh, eGRID2023); CUE ${(pue * co2kg / 1000).toFixed(2)}. ` +
+         `Dry heat rejection → WUE ≈ 0 L/kWh (evaporative would run 1.8–2.5).`);
+      // procurement critical path
+      const lt = eng.leadTimes;
+      ok(`Procurement critical path (Wood Mackenzie Q2 2025): pad-mount transformers ` +
+         `${lt['Pad-mount / unit-substation step-down'] ?? 78} wks ≈ gensets ${lt['Diesel genset (2-3 MW)'] ?? 78} wks > ` +
+         `MV switchgear ${lt['MV switchgear (paralleling)'] ?? 44} > UPS ${lt['UPS (static, IGBT)'] ?? 32} — ` +
+         `~18 months to energization; a NEW substation transformer would push ${lt['Substation power transformer (standard)'] ?? 128}+ wks.`);
+      if (cfg.chip?.avail === 'roadmap') warn(`${cfg.chip.label} is a roadmap platform (${cfg.chip.year}) — ` +
+         `spec confidence '${cfg.chip.conf}'; treat rack counts as planning-grade.`);
+    }
 
     // AMD max-fit: the 50 MW question
     const amd = CHIP_OPTIONS.filter(c => c.key.startsWith('mi'));

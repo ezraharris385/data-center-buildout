@@ -1,43 +1,64 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js?b39';
-import { comp, kw } from './catalog.js?b39';
+import * as B from './builders.js?b40';
+import { comp, kw } from './catalog.js?b40';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
    closest catalog rack for true-dimension rendering. Power figures are
    vendor-published rack/system numbers (recall-grade). */
 export const CHIP_OPTIONS = [
-  { key: 'gb200',  label: 'GB200 class (NVL72)',        gpusPerRack: 72, kwRack: 120, cooling: 'liquid', rackId: 'RCK-004',
-    builder: () => B.buildNVL72('RCK-004', { accent: '#3ddc84' }), year: 2025, rackKg: 1360, domain: 72, volts: '48 VDC busbar',
+  // kW/rack, weights, voltages, liquid-heat share, availability and costs are
+  // from DesignStudioEquipmentSpecs.xlsx (CBRE Design Studio engine, catalog v1).
+  // sysCost = system $ incl. silicon (tenant-side); bomCost = facility hardware.
+  { key: 'gb200',  label: 'GB200 NVL72 (132 kW)',      gpusPerRack: 72, kwRack: 132, cooling: 'liquid', rackId: 'RCK-004',
+    builder: () => B.buildNVL72('RCK-004', { accent: '#3ddc84' }), year: 2025, rackKg: 1360, domain: 72, volts: '415/480 AC → 54 VDC busbar',
+    liquidShare: 0.87, avail: 'shipping', sysCost: 3200000, bomCost: 95000, conf: 'high',
     use: 'Frontier training — 72-GPU NVLink scale-up domain, one machine per rack' },
-  { key: 'vr200',  label: 'Vera Rubin (VR200 NVL144)',  gpusPerRack: 72, kwRack: 132, cooling: 'liquid', rackId: 'RCK-005',
-    builder: () => B.buildNVL72('RCK-005', { accent: '#8a6cff' }), year: 2027, rackKg: 1450, domain: 72, volts: '48 VDC busbar',
-    use: 'Next-gen frontier training — 144 dies / 72 packages, Oberon-class rack' },
-  { key: 'gb300',  label: 'Blackwell Ultra (GB300 NVL72)', gpusPerRack: 72, kwRack: 135, cooling: 'liquid', rackId: 'RCK-005',
-    builder: () => B.buildNVL72('RCK-005', { accent: '#2fd1c0' }), year: 2026, rackKg: 1400, domain: 72, volts: '48 VDC busbar',
-    use: 'Frontier training + high-throughput reasoning inference' },
-  { key: 'b200',   label: 'Blackwell (GB200/B200 HGX)',  gpusPerRack: 32, kwRack: 58,  cooling: 'liquid', rackId: 'RCK-003',
+  { key: 'gb200n36', label: 'GB200 NVL36 (66 kW)',     gpusPerRack: 36, kwRack: 66,  cooling: 'liquid', rackId: 'RCK-004',
+    builder: () => B.buildNVL72('RCK-004', { accent: '#2f9e6b' }), year: 2025, rackKg: 700, domain: 36, volts: '415/480 AC → 54 VDC busbar',
+    liquidShare: 0.87, avail: 'shipping', sysCost: 1700000, bomCost: 60000, conf: 'med',
+    use: 'Half-domain Blackwell — power-constrained sites, paired racks form NVL72' },
+  { key: 'gb300',  label: 'GB300 NVL72 (142 kW)',      gpusPerRack: 72, kwRack: 142, cooling: 'liquid', rackId: 'RCK-005',
+    builder: () => B.buildNVL72('RCK-005', { accent: '#2fd1c0' }), year: 2026, rackKg: 1497, domain: 72, volts: '415/480 AC → 54 VDC busbar',
+    liquidShare: 0.88, avail: 'shipping', sysCost: 3850000, bomCost: 110000, conf: 'high',
+    use: 'Blackwell Ultra — frontier training + high-throughput reasoning inference' },
+  { key: 'vr200',  label: 'Vera Rubin VR200 NVL72 (230 kW)', gpusPerRack: 72, kwRack: 230, cooling: 'liquid', rackId: 'RCK-005',
+    builder: () => B.buildNVL72('RCK-005', { accent: '#8a6cff' }), year: 2027, rackKg: 1814, domain: 72, volts: '800 VDC',
+    liquidShare: 0.92, avail: 'roadmap', sysCost: 8000000, bomCost: 150000, conf: 'med',
+    use: 'Next-gen frontier training — Oberon rack, 800 VDC, volume H2 2026' },
+  { key: 'kyber',  label: 'Rubin Ultra Kyber NVL576 (600 kW)', gpusPerRack: 144, kwRack: 600, cooling: 'liquid', rackId: 'RCK-005',
+    builder: () => B.buildNVL72('RCK-005', { accent: '#b44cff' }), year: 2027, rackKg: 2000, domain: 144, volts: '800 VDC',
+    liquidShare: 0.92, avail: 'roadmap', sysCost: null, bomCost: 200000, conf: 'low',
+    use: 'Rubin Ultra rack-scale (H2 2027) — 576 dies/rack; the 600 kW era' },
+  { key: 'b200',   label: 'B200 HGX (58 kW)',          gpusPerRack: 32, kwRack: 58,  cooling: 'liquid', rackId: 'RCK-003',
     builder: () => B.buildHGXRack('RCK-003', { liquid: true, accent: '#76b900' }), year: 2025, rackKg: 950, domain: 8, volts: '415 V AC whips',
+    liquidShare: 0.75, avail: 'shipping', sysCost: null, bomCost: null, conf: 'med',
     use: 'Training + inference on 8-GPU HGX nodes — cloud-standard building block, DLC' },
-  { key: 'h200',   label: 'Hopper H200 (HGX)',           gpusPerRack: 32, kwRack: 44,  cooling: 'air',    rackId: 'RCK-003',
+  { key: 'h200',   label: 'Hopper H200 HGX (44 kW)',   gpusPerRack: 32, kwRack: 44,  cooling: 'air',    rackId: 'RCK-003',
     builder: () => B.buildHGXRack('RCK-003', { liquid: false, accent: '#76b900' }), year: 2024, rackKg: 880, domain: 8, volts: '415 V AC whips',
+    liquidShare: 0, avail: 'shipping', sysCost: null, bomCost: null, conf: 'med',
     use: 'Inference + fine-tuning — memory-upgraded Hopper, air/RDHx cooled' },
-  { key: 'h100',   label: 'Hopper H100 SXM (HGX)',       gpusPerRack: 32, kwRack: 41,  cooling: 'air',    rackId: 'RCK-003',
+  { key: 'h100',   label: 'Hopper H100 SXM HGX (41 kW)', gpusPerRack: 32, kwRack: 41, cooling: 'air',   rackId: 'RCK-003',
     builder: () => B.buildHGXRack('RCK-003', { liquid: false, accent: '#76b900' }), year: 2023, rackKg: 860, domain: 8, volts: '415 V AC whips',
+    liquidShare: 0, avail: 'shipping', sysCost: null, bomCost: null, conf: 'med',
     use: 'The installed-base workhorse — training/fine-tune/inference on 8-GPU nodes' },
-  { key: 'mi450x', label: 'Instinct MI450X (Helios)',    gpusPerRack: 72, kwRack: 140, cooling: 'liquid', rackId: 'RCK-004',
-    builder: () => B.buildNVL72('RCK-004', { accent: '#e0442e' }), year: 2026, rackKg: 1500, domain: 72, volts: '48 VDC busbar',
-    use: 'AMD rack-scale frontier training — 72-GPU UALink domain (Helios)' },
-  { key: 'mi355x', label: 'Instinct MI355X (2025)',      gpusPerRack: 32, kwRack: 62,  cooling: 'liquid', rackId: 'RCK-003',
+  { key: 'mi450x', label: 'AMD Helios MI450X (230 kW)', gpusPerRack: 72, kwRack: 230, cooling: 'liquid', rackId: 'RCK-004',
+    builder: () => B.buildNVL72('RCK-004', { accent: '#e0442e' }), year: 2026, rackKg: 1600, domain: 72, volts: '800 VDC',
+    liquidShare: 0.90, avail: 'roadmap', sysCost: 3000000, bomCost: 150000, conf: 'low',
+    use: 'AMD rack-scale frontier training — 72-GPU UALink domain, H2 2026' },
+  { key: 'mi355x', label: 'AMD MI355X UBB (60 kW)',    gpusPerRack: 32, kwRack: 60,  cooling: 'liquid', rackId: 'RCK-003',
     builder: () => B.buildHGXRack('RCK-003', { liquid: true, accent: '#e0442e' }), year: 2025, rackKg: 980, domain: 8, volts: '415 V AC whips',
-    use: 'AMD training + inference — 1.4 kW/GPU UBB nodes, DLC required' },
-  { key: 'mi325x', label: 'Instinct MI325X (2024)',      gpusPerRack: 32, kwRack: 46,  cooling: 'air',    rackId: 'RCK-003',
+    liquidShare: 0.78, avail: 'shipping', sysCost: null, bomCost: null, conf: 'med',
+    use: 'AMD training + inference — 4× 15 kW UBB nodes, DLC required' },
+  { key: 'mi325x', label: 'AMD MI325X (46 kW)',        gpusPerRack: 32, kwRack: 46,  cooling: 'air',    rackId: 'RCK-003',
     builder: () => B.buildHGXRack('RCK-003', { liquid: false, accent: '#e0442e' }), year: 2024, rackKg: 900, domain: 8, volts: '415 V AC whips',
+    liquidShare: 0, avail: 'shipping', sysCost: null, bomCost: null, conf: 'med',
     use: 'Memory-capacity inference — 256 GB HBM3E per GPU, air-cooled' },
-  { key: 'mi300x', label: 'Instinct MI300X (2024)',      gpusPerRack: 32, kwRack: 38,  cooling: 'air',    rackId: 'RCK-002',
+  { key: 'mi300x', label: 'AMD MI300X (38 kW)',        gpusPerRack: 32, kwRack: 38,  cooling: 'air',    rackId: 'RCK-002',
     builder: () => B.buildHGXRack('RCK-002', { liquid: false, accent: '#e0442e' }), year: 2024, rackKg: 850, domain: 8, volts: '415 V AC whips',
+    liquidShare: 0, avail: 'shipping', sysCost: null, bomCost: null, conf: 'med',
     use: 'LLM serving at max memory per dollar — the inference-fleet chip' },
 ];
 
@@ -72,7 +93,21 @@ export const SITE_LEHIGH = {
   measured: true,
 };
 
-export const SITES = { '77n': SITE_77N, 'lehigh': SITE_LEHIGH };
+/* Google Gen-4 AI reference building — from the Design Studio Building Presets
+   sheet (published-derived): 500×300 ft, 2 stories, 34 ft clear, 400 psf slab,
+   liquid-ready hybrid, 2N UPS / N+1 gen, target PUE 1.10. A benchmark shell to
+   compare the retrofit sites against hyperscale practice. */
+export const SITE_G4 = {
+  key: 'g4', name: 'Google Gen-4 AI (reference)',
+  buildingW_ft: 300, buildingD_ft: 500, clearH_ft: 34,
+  grossSF: 300000, officeSF: 8000, stories: 2,
+  utilityMW: 66, criticalITMW: 60, designPUE: 1.10,
+  genMW: 72, upsMW: 60, halls: 2, columnFt: 40,
+  dockDoors: 6, driveIns: 2, grayD: 14,
+  reference: true,
+};
+
+export const SITES = { '77n': SITE_77N, 'lehigh': SITE_LEHIGH, 'g4': SITE_G4 };
 
 export const RACK_OPTIONS = [
   { id: 'RCK-004', label: 'NVIDIA GB200 NVL72 · 120 kW · liquid', cooling: 'liquid', kw: 120, builder: () => B.buildNVL72('RCK-004') },
@@ -124,7 +159,11 @@ export function activeSite() { return SITES[custom.site] ?? SITE_77N; }
 // shared sizing math: what this chip deploys inside the active site's confines
 export function versionStats(chip, s = activeSite()) {
   const liquid = chip.cooling === 'liquid';
-  const pue = liquid ? 1.15 : 1.32;
+  // Design Studio efficiency model: base PUE by cooling arch (dlc 1.2, hybrid
+  // air 1.32), with liquid heat-share pulling toward the 1.06 liquid floor at
+  // weight 0.55. Climate adj: temperate = 0 (Chicago metro sites).
+  const base = liquid ? 1.2 : 1.32;
+  const pue = Math.round((base - (base - 1.06) * 0.55 * (chip.liquidShare ?? 0)) * 100) / 100;
   const itBudgetKW = Math.floor(Math.min(s.utilityMW * 1000 / pue, s.upsMW * 1000));
   const maxRacks = Math.floor(itBudgetKW / chip.kwRack);
   return {
@@ -195,7 +234,7 @@ export function siteVersionConfig(chipKey) {
       maxRacks, kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
     },
     balanceHalls: s.halls > 1,
-    floors: 1,
+    floors: s.stories ?? 1,
     wallH: s.clearH_ft * FT * 0.55,
     shell: custom.shell,                                   // solid / glass / open — user-controlled
     building: { w: wFt * FT, d: dFt * FT },
@@ -304,6 +343,7 @@ export function initBuilder(onChange) {
         <option value="free" ${custom.site === 'free' ? 'selected' : ''}>Freeform sandbox</option>
         <option value="77n" ${custom.site === '77n' ? 'selected' : ''}>77 N Ave &amp; Niles — 30 MW retrofit</option>
         <option value="lehigh" ${custom.site === 'lehigh' ? 'selected' : ''}>Lehigh Ave — measured from KMZ</option>
+        <option value="g4" ${custom.site === 'g4' ? 'selected' : ''}>Google Gen-4 AI — reference shell</option>
       </select>
       <div class="bld-label">Compute platform</div>
       <select id="bldChip">${CHIP_OPTIONS.map(c =>

@@ -24,8 +24,16 @@ export async function loadCatalog() {
   try {
     RENDER_PARTS = await (await fetch('data/render_parts.json')).json();
   } catch { RENDER_PARTS = {}; }
+  try {
+    DESIGN = await (await fetch('data/design_engine.json')).json();
+  } catch { DESIGN = null; }
   return CATALOG;
 }
+
+// CBRE Design Studio engine data (equipment costs, cost model, efficiency
+// model, grid factors, lead times) — data/design_engine.json
+let DESIGN = null;
+export function design() { return DESIGN; }
 
 // render-detail parts (data/render_parts.xlsx → json): sub-part geometry per SKU
 export function partsFor(id) { return RENDER_PARTS[id] ?? null; }
