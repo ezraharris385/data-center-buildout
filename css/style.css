@@ -321,3 +321,14 @@ body.tour-mode #hintbar, body.tour-mode #flowCard { display: none !important; }
 .build-tag { font: 400 9px var(--mono); color: rgba(125,142,163,.55); margin-left: 6px; }
 .btn-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
 .shell-btn.on { color: var(--amber) !important; border-color: var(--amber) !important; background: rgba(255,194,51,.1) !important; }
+
+/* ---------- site map ---------- */
+#mapOverlay { position: fixed; inset: 0; z-index: 45; background: rgba(4,6,9,.72); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; }
+.map-card { position: relative; width: min(1000px, 94vw); background: #0d1320; border: 1px solid var(--panel-border); border-radius: 14px; padding: 22px 26px; }
+.map-card h2 { font-size: 17px; margin-bottom: 10px; }
+#siteMap { width: 100%; height: min(62vh, 640px); border-radius: 10px; background: #0a0e14; }
+.map-note { font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin-bottom: 8px; }
+.map-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 11px; color: var(--ink); }
+.ml-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.ml-warn { color: var(--amber); font-size: 10.5px; margin-left: auto; }
+.leaflet-container { font: 11px var(--sans); }

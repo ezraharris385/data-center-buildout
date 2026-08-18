@@ -7,9 +7,9 @@
 //   Equipment yard:                 z ∈ [-grayD - yardD, -grayD]
 // Multi-floor: white space repeats on each level at y = floor * floorH.
 import * as THREE from 'three';
-import { STD, dims, comp, kw } from './catalog.js?b40';
-import { mats, blinkMats } from './materials.js?b40';
-import * as B from './builders.js?b40';
+import { STD, dims, comp, kw } from './catalog.js?b41';
+import { mats, blinkMats } from './materials.js?b41';
+import * as B from './builders.js?b41';
 
 /* ---------- canvas label sprite ---------- */
 function makeLabel(text, { size = 44, color = '#9fc9e8', sub = null } = {}) {
@@ -474,23 +474,16 @@ export function buildFacility(scene, cfg, flows) {
       // airflow + heat for this pair
       const half = rowLen / 2;
       if (liquid) {
-        flows.addAir(new THREE.Box3(new THREE.Vector3(-half, yOff + 0.3, aisleZ - aisleShared / 2), new THREE.Vector3(half, yOff + rackH, aisleZ + aisleShared / 2)),
-          new THREE.Vector3(0, 0.9, 0), { color: 0xff6a4a, count: 110, opacity: 0.35 });
-        flows.addHeat(new THREE.Vector3(0, yOff + rackH, aisleZ), { count: 44, spread: half * 0.8, rise: 2.2, size: 1.1, opacity: 0.1 });
-        flows.addAir(new THREE.Box3(new THREE.Vector3(-half, yOff + 0.2, zA - rackD / 2 - 1.1), new THREE.Vector3(half, yOff + rackH * 0.8, zA - rackD / 2 - 0.05)),
-          new THREE.Vector3(0, 0.05, 0.5), { color: 0x7fd4ff, count: 70, opacity: 0.3 });
-        if (rowCount > p * 2 + 1)
-          flows.addAir(new THREE.Box3(new THREE.Vector3(-half, yOff + 0.2, zB + rackD / 2 + 0.05), new THREE.Vector3(half, yOff + rackH * 0.8, zB + rackD / 2 + 1.1)),
-            new THREE.Vector3(0, 0.05, -0.5), { color: 0x7fd4ff, count: 70, opacity: 0.3 });
+        // DLC: energy leaves on the LIQUID, not the air — no particle clouds in
+        // the aisle. The coolant supply/return flows along the row manifolds
+        // (added below) carry the energy-transfer animation instead.
       } else {
-        flows.addAir(new THREE.Box3(new THREE.Vector3(-half, yOff + 0.1, aisleZ - aisleShared / 2), new THREE.Vector3(half, yOff + rackH * 0.9, aisleZ + aisleShared / 2)),
-          new THREE.Vector3(0, 0.55, 0), { color: 0x7fd4ff, count: 110, opacity: 0.4 });
-        flows.addAir(new THREE.Box3(new THREE.Vector3(-half, yOff + 0.4, zA - rackD / 2 - 0.9), new THREE.Vector3(half, yOff + rackH + 1, zA - rackD / 2 - 0.05)),
-          new THREE.Vector3(0, 0.8, -0.25), { color: 0xff6a4a, count: 80, opacity: 0.3 });
-        if (rowCount > p * 2 + 1)
-          flows.addAir(new THREE.Box3(new THREE.Vector3(-half, yOff + 0.4, zB + rackD / 2 + 0.05), new THREE.Vector3(half, yOff + rackH + 1, zB + rackD / 2 + 0.9)),
-            new THREE.Vector3(0, 0.8, 0.25), { color: 0xff6a4a, count: 80, opacity: 0.3 });
-        flows.addHeat(new THREE.Vector3(0, yOff + rackH + 0.6, zA - rackD / 2 - 0.5), { count: 32, spread: half * 0.7, rise: 1.6, size: 0.9, opacity: 0.08 });
+        // supply air hugs the floor of the cold aisle (thin, directional)
+        flows.addAir(new THREE.Box3(new THREE.Vector3(-half, yOff + 0.05, aisleZ - aisleShared / 2), new THREE.Vector3(half, yOff + 0.9, aisleZ + aisleShared / 2)),
+          new THREE.Vector3(0, 0.35, 0), { color: 0x7fd4ff, count: 45, opacity: 0.22, size: 0.13 });
+        // exhaust rises in thin columns ABOVE the rack line — never fills a box
+        flows.addHeat(new THREE.Vector3(-half / 2, yOff + rackH + 0.35, zA - rackD / 2 - 0.4), { count: 14, spread: 0.7, rise: 2.4, size: 0.7, opacity: 0.05 });
+        flows.addHeat(new THREE.Vector3(half / 2, yOff + rackH + 0.35, zA - rackD / 2 - 0.4), { count: 14, spread: 0.7, rise: 2.4, size: 0.7, opacity: 0.05 });
       }
 
       zCursors[hallIdx] = z + pairDepth + aisleOuter;
@@ -605,7 +598,7 @@ export function buildFacility(scene, cfg, flows) {
     flows.addFans(fans.map(fn => fn.userData.hub ? fn : { userData: { hub: fn } }));
     chillPositions.push(new THREE.Vector3(x, 1.2, zc));
     // heat exhausts upward WELL clear of the fan deck — thin fast columns, never a pool
-    flows.addHeat(new THREE.Vector3(x, dims(chId).h + 1.4, zc), { count: 22, spread: 1.3, rise: 5.5, size: 0.8, opacity: 0.045 });
+    flows.addHeat(new THREE.Vector3(x, dims(chId).h + 1.4, zc), { count: 16, spread: 0.9, rise: 6.5, size: 0.7, opacity: 0.035 });
   }
 
   let towerPos = null;

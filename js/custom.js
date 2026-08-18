@@ -1,8 +1,8 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js?b40';
-import { comp, kw } from './catalog.js?b40';
+import * as B from './builders.js?b41';
+import { comp, kw } from './catalog.js?b41';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
@@ -350,6 +350,7 @@ export function initBuilder(onChange) {
         `<option value="${c.key}" ${c.key === custom.chip ? 'selected' : ''}>${c.label}</option>`).join('')}</select>
       <div class="learn-hint">Picking a chip loads that platform's full buildout — racks, cooling,
       yard plant, and telemetry all re-derive. Click any row below to switch.</div>
+      <button id="btnSiteMap" class="agent-run" style="margin:8px 0 4px">🗺 Site plan on map</button>
       <div class="bld-label">Shell — see inside</div>
       <div class="btn-grid btn-grid-3">
         <button class="shell-btn ${custom.shell === 'solid' ? 'on' : ''}" data-shell="solid">Solid</button>

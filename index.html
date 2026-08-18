@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Data Center Buildout — 3D Operations Studio</title>
-<link rel="stylesheet" href="css/style.css?b40">
+<link rel="stylesheet" href="css/style.css?b41">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏭</text></svg>">
 <script type="importmap">
 {
@@ -31,7 +33,7 @@
     <span class="brand-mark">▣</span>
     <span class="brand-name">DATA CENTER BUILDOUT</span>
     <span class="brand-tag">3D Operations Studio</span>
-    <span class="build-tag" id="buildTag">build 40</span>
+    <span class="build-tag" id="buildTag">build 41</span>
   </div>
   <nav id="tabs">
     <button class="tab active" data-scene="hyperscale">Hyperscale</button>
@@ -150,6 +152,17 @@
   </div>
 </aside>
 
+<!-- Site map overlay -->
+<div id="mapOverlay" class="hidden">
+  <div class="map-card">
+    <button class="modal-close" id="mapClose">✕</button>
+    <h2>Site plan — on the ground</h2>
+    <div id="mapNote" class="map-note"></div>
+    <div id="siteMap"></div>
+    <div id="mapLegend" class="map-legend"></div>
+  </div>
+</div>
+
 <!-- Database view -->
 <div id="dbView" class="hidden"></div>
 
@@ -206,6 +219,6 @@
 
 <canvas id="scene3d"></canvas>
 
-<script type="module" src="js/main.js?b40"></script>
+<script type="module" src="js/main.js?b41"></script>
 </body>
 </html>

@@ -7,17 +7,18 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js?b40';
-import { animateBlink } from './materials.js?b40';
-import { FlowSystem } from './flows.js?b40';
-import { buildFacility } from './facility.js?b40';
-import { SCENES } from './scenes.js?b40';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b40';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b40';
-import { initDatabase, setDatabaseVisible } from './database.js?b40';
-import { customConfig, initBuilder } from './custom.js?b40';
-import { initAgent } from './agent.js?b40';
-import * as UI from './ui.js?b40';
+import { loadCatalog, comp } from './catalog.js?b41';
+import { animateBlink } from './materials.js?b41';
+import { FlowSystem } from './flows.js?b41';
+import { buildFacility } from './facility.js?b41';
+import { SCENES } from './scenes.js?b41';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b41';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b41';
+import { initDatabase, setDatabaseVisible } from './database.js?b41';
+import { customConfig, initBuilder } from './custom.js?b41';
+import { initAgent } from './agent.js?b41';
+import { openSiteMap, closeSiteMap } from './sitemap.js?b41';
+import * as UI from './ui.js?b41';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
@@ -545,6 +546,9 @@ setTimeout(() => {
 
   initDatabase();
   initBuilder(rebuildCustom);
+  document.getElementById('btnSiteMap').addEventListener('click', () => openSiteMap(facility, state.cfg));
+  document.getElementById('mapClose').addEventListener('click', closeSiteMap);
+  document.getElementById('mapOverlay').addEventListener('click', e => { if (e.target.id === 'mapOverlay') closeSiteMap(); });
   initAgent(() => ({ cfg: state.cfg, stats: facility?.stats ?? {} }));
 
   const params = new URLSearchParams(location.search);
