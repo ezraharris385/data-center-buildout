@@ -2,7 +2,7 @@
 // operational flow, and an equipment guide that explains every system in the
 // current facility plus the cycles (power, cooling, air) that connect them.
 import * as THREE from 'three';
-import { comp, kw } from './catalog.js?b38';
+import { comp, kw } from './catalog.js?b39';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const fmtMW = v => v >= 1000 ? `${(v / 1000).toFixed(1)} MW` : `${Math.round(v)} kW`;

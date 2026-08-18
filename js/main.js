@@ -7,17 +7,17 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js?b38';
-import { animateBlink } from './materials.js?b38';
-import { FlowSystem } from './flows.js?b38';
-import { buildFacility } from './facility.js?b38';
-import { SCENES } from './scenes.js?b38';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b38';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b38';
-import { initDatabase, setDatabaseVisible } from './database.js?b38';
-import { customConfig, initBuilder } from './custom.js?b38';
-import { initAgent } from './agent.js?b38';
-import * as UI from './ui.js?b38';
+import { loadCatalog, comp } from './catalog.js?b39';
+import { animateBlink } from './materials.js?b39';
+import { FlowSystem } from './flows.js?b39';
+import { buildFacility } from './facility.js?b39';
+import { SCENES } from './scenes.js?b39';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b39';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b39';
+import { initDatabase, setDatabaseVisible } from './database.js?b39';
+import { customConfig, initBuilder } from './custom.js?b39';
+import { initAgent } from './agent.js?b39';
+import * as UI from './ui.js?b39';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
@@ -483,6 +483,34 @@ UI.initUI({
   onUtilityToggle: () => state.utilityOn ? failUtility() : restoreUtility(),
 });
 
+
+/* ---------------- self-driving demo (?demo=1) ----------------
+   Clicks through the real UI on a timer: archetype presets, then the Custom
+   page on the Lehigh site, flipping chip platforms and shell modes so the
+   physical + operational differences play out on screen. */
+function runDemo() {
+  const click = sel => document.querySelector(sel)?.click();
+  const setSelect = (id, val) => { const el = document.getElementById(id); if (!el) return; el.value = val; el.dispatchEvent(new Event('input')); };
+  const showAnalysis = () => { click('#agentRun'); setTimeout(() => document.getElementById('rightPanel').scrollTo({ top: 99999, behavior: 'smooth' }), 400); };
+  const topRight = () => document.getElementById('rightPanel').scrollTo({ top: 0, behavior: 'smooth' });
+  const steps = [
+    [2800,  () => click('.tab[data-scene="cloud"]')],
+    [6200,  () => click('.tab[data-scene="colocation"]')],
+    [9600,  () => click('.tab[data-scene="enterprise"]')],
+    [13000, () => click('.tab[data-scene="custom"]')],
+    [14200, () => setSelect('bldSite', 'lehigh')],          // Lehigh, GB200 default
+    [18200, showAnalysis],
+    [22500, () => { topRight(); setSelect('bldChip', 'h100'); }],   // air platform: in-row coolers, space-limited
+    [26500, showAnalysis],
+    [30800, () => { topRight(); setSelect('bldChip', 'mi450x'); }], // AMD Helios rack-scale
+    [34800, showAnalysis],
+    [38600, () => { topRight(); click('.shell-btn[data-shell="glass"]'); }],
+    [42400, () => click('.shell-btn[data-shell="open"]')],
+    [45400, () => window.__cam.fly('rack', 1.6)],
+  ];
+  for (const [t, fn] of steps) setTimeout(fn, t);
+}
+
 /* ---------------- render loop ---------------- */
 const clock = new THREE.Clock();
 let rafAlive = false;
@@ -529,6 +557,7 @@ setTimeout(() => {
   setTimeout(UI.hideLoading, 350);
   animate();
 
+  if (params.get('demo') === '1') setTimeout(runDemo, 400);
   const tourMode = params.get('tour');
   if (tourMode === 'cine' || tourMode === 'promo') {
     const record = params.get('record') === '1';

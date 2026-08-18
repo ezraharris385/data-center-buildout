@@ -4,8 +4,8 @@
 //      (capacity, redundancy, runtime, PUE) — always available, no network.
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
-import { comp, kw } from './catalog.js?b38';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b38';
+import { comp, kw } from './catalog.js?b39';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b39';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
