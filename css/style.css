@@ -334,3 +334,4 @@ body.tour-mode #hintbar, body.tour-mode #flowCard { display: none !important; }
 .leaflet-container { font: 11px var(--sans); }
 .drag-dot { background: rgba(255,255,255,.9); border: 3px dotted #0a0e14; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,.8); cursor: grab; }
 .map-reset { margin-left: 10px; border: 1px solid var(--panel-border); background: rgba(255,255,255,.05); color: var(--amber); font: 600 11px var(--sans); padding: 3px 10px; border-radius: 6px; cursor: pointer; }
+#plantSection select { width: 100%; margin-bottom: 6px; background: rgba(255,255,255,.05); border: 1px solid var(--panel-border); color: var(--ink); border-radius: 7px; padding: 6px 10px; font: 500 12px var(--sans); }

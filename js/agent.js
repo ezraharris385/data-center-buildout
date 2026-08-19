@@ -4,8 +4,8 @@
 //      (capacity, redundancy, runtime, PUE) — always available, no network.
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
-import { comp, kw, design } from './catalog.js?b43';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b43';
+import { comp, kw, design } from './catalog.js?b44';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b44';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
@@ -71,11 +71,20 @@ export function analyze(cfg, stats) {
     if (site.crahNeed > 0) warn(`Air-cooled platform: needs ~${site.crahNeed} CW146-class air handlers for ${fmt(itKW)} IT — at this density rear-door HX or fan walls are the realistic fit-out; perimeter wall space caps the drawing at ${cfg.crahCount}.`);
     if (site.battCabinets) ok(`Batteries: ${site.battCabinets} cabinets ≈ 5 min ride-through at full ${fmt(itKW)} IT (scales live in the failover sim).`);
 
+    // user plant overrides (vs the optimized default)
+    if (cfg._plantOv?.active) {
+      warn(`Plant overrides active (${cfg._plantOv.dPUE >= 0 ? '+' : ''}${cfg._plantOv.dPUE.toFixed(2)} PUE vs optimized): ${cfg._plantOv.notes.join('; ')}. Reset the PLANT panel to 'Auto' for the optimized build.`);
+    }
+
     // balance-of-plant optimization (everything that isn't the chip)
     if (site.bop) {
       ok(`Balance of plant optimized to this platform → PUE ${site.bop.pue}${site.bop.wue ? `, WUE ~${site.bop.wue} L/kWh (adiabatic assist)` : ', WUE ~0 (dry rejection)'}:`);
-      for (const n of site.bop.notes) ok(`• ${n}`);
-      if (site.bop.dc800) ok(`BESS ride-through replaces central UPS strings: ${cfg.yard.bess} × 2 MWh LFP blocks cover ~5 min at full IT load (NFPA 855 siting on the pad).`);
+      const bessRemoved = cfg._plantOv?.active && (cfg.yard.bess ?? 0) === 0 && site.bop.dc800;
+      for (const n of site.bop.notes) {
+        if (bessRemoved && n.includes('BESS')) continue;    // overridden away
+        ok(`• ${n}`);
+      }
+      if (site.bop.dc800 && (cfg.yard.bess ?? 0) > 0) ok(`BESS ride-through replaces central UPS strings: ${cfg.yard.bess} × 2 MWh LFP blocks cover ~5 min at full IT load (NFPA 855 siting on the pad).`);
     }
 
     // platform-specific physical & usage engineering

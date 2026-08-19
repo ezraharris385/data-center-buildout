@@ -7,18 +7,18 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js?b43';
-import { animateBlink } from './materials.js?b43';
-import { FlowSystem } from './flows.js?b43';
-import { buildFacility } from './facility.js?b43';
-import { SCENES } from './scenes.js?b43';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b43';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b43';
-import { initDatabase, setDatabaseVisible } from './database.js?b43';
-import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b43';
-import { initAgent } from './agent.js?b43';
-import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b43';
-import * as UI from './ui.js?b43';
+import { loadCatalog, comp } from './catalog.js?b44';
+import { animateBlink } from './materials.js?b44';
+import { FlowSystem } from './flows.js?b44';
+import { buildFacility } from './facility.js?b44';
+import { SCENES } from './scenes.js?b44';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b44';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b44';
+import { initDatabase, setDatabaseVisible } from './database.js?b44';
+import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b44';
+import { initAgent } from './agent.js?b44';
+import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b44';
+import * as UI from './ui.js?b44';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
@@ -41,10 +41,12 @@ camera.position.set(60, 45, 90);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = 0.06;
+controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI * 0.495;
-controls.minDistance = 2;
+controls.minDistance = 0.6;          // get nose-close to a tray
 controls.maxDistance = 420;
+controls.zoomSpeed = 1.5;
+controls.zoomToCursor = true;        // scroll dives at what you're pointing at
 
 // dusk lighting
 const hemi = new THREE.HemisphereLight(0x4a6a90, 0x141820, 1.1);
@@ -109,7 +111,66 @@ function disposeScene() {
   facility = null; flows = null;
 }
 
+/* PLANT overrides — the non-chip levers, user-controllable on every scene.
+   'auto' = the optimized default (bopFor for chip builds, archetype design
+   otherwise). Overrides mutate a copy of the config + adjust basePUE with
+   documented deltas, and the analyst calls out what you changed. */
+const plantOv = { heat: 'auto', power: 'auto', air: 'auto', red: 'n1' };
+
+function applyPlantOverrides(cfgIn) {
+  const cfg = { ...cfgIn, yard: { ...cfgIn.yard }, gray: cfgIn.gray.map(g => ({ ...g })) };
+  const liquid = cfg.cooling === 'liquid';
+  const kwRack = cfg.rows.kwPerRack || 8;
+  const itMW = (cfg.rows.maxRacks ?? cfg.rows.count * cfg.rows.racksPerRow) * kwRack / 1000;
+  const notes = [];
+  let dPUE = 0;
+
+  // heat rejection tech
+  if (plantOv.heat === 'dry' && cfg.yard.chillers.id !== 'MEC-005') {
+    if (liquid) { cfg.yard.chillers.id = 'MEC-005'; dPUE -= 0.02; notes.push('forced adiabatic dry coolers (−0.02 PUE)'); }
+    else notes.push('dry coolers alone can’t serve a chilled-water air plant — override ignored');
+  } else if (plantOv.heat === 'chillers' && cfg.yard.chillers.id === 'MEC-005') {
+    cfg.yard.chillers.id = 'MEC-001'; dPUE += 0.02; notes.push('forced air-cooled chillers (+0.02 PUE, WUE→0)');
+  }
+
+  // power topology
+  const hasBess = (cfg.yard.bess ?? 0) > 0;
+  if (plantOv.power === 'ups' && hasBess) {
+    cfg.yard.bess = 0; dPUE += 0.01;
+    cfg.gray = cfg.gray.map(g => g.id === 'ELC-001' ? { ...g, count: g.count + 1 } : g.id === 'ELC-005' ? { ...g, count: Math.max(4, g.count * 2) } : g);
+    notes.push('forced central UPS (+0.01 PUE, BESS removed, UPS room grows)');
+  } else if (plantOv.power === 'bess' && !hasBess) {
+    cfg.yard.bess = Math.min(4, Math.ceil(itMW * (5 / 60) / 2) + 1); dPUE -= 0.01;
+    cfg.gray = cfg.gray.map(g => g.id === 'ELC-001' || g.id === 'ELC-003' || g.id === 'ELC-002' || g.id === 'ELC-004' ? { ...g, count: Math.max(1, g.count - 1) } : g.id === 'ELC-005' ? { ...g, count: Math.max(2, Math.floor(g.count / 2)) } : g);
+    notes.push(`forced BESS ride-through (−0.01 PUE, ${cfg.yard.bess}× 2 MWh blocks on the pad)`);
+  }
+
+  // air supply temp (air-cooled scenes only)
+  if (!liquid) {
+    const optimizedAlready = !!cfg.chip;   // chip builds already run 27 °C in auto
+    if (plantOv.air === 'std' && optimizedAlready) { dPUE += 0.03; notes.push('conservative 24 °C supply (+0.03 PUE)'); }
+    if (plantOv.air === 'allow' && !optimizedAlready) { dPUE -= 0.03; notes.push('27 °C ASHRAE-allowable supply (−0.03 PUE)'); }
+  }
+
+  // redundancy
+  if (plantOv.red === 'n') {
+    cfg.yard.gensets = { ...cfg.yard.gensets, count: Math.max(1, cfg.yard.gensets.count - 1) };
+    cfg.yard.chillers = { ...cfg.yard.chillers, count: Math.max(1, cfg.yard.chillers.count - 1) };
+    notes.push('N-only redundancy — one failure = load shed (analyst will flag)');
+  } else if (plantOv.red === '2n') {
+    cfg.yard.gensets = { ...cfg.yard.gensets, count: Math.min(16, Math.ceil(cfg.yard.gensets.count * 1.8) ) };
+    cfg.yard.chillers = { ...cfg.yard.chillers, count: Math.min(28, Math.ceil(cfg.yard.chillers.count * 1.8)) };
+    dPUE += 0.01;
+    notes.push('2N plant (+0.01 PUE fixed losses, yard nearly doubles)');
+  }
+
+  cfg.basePUE = Math.max(1.06, Math.round((cfg.basePUE + dPUE) * 100) / 100);
+  cfg._plantOv = { active: notes.length > 0, notes, dPUE };
+  return cfg;
+}
+
 function build3D(cfg) {
+  cfg = applyPlantOverrides(cfg);
   disposeScene();
   state.utilityOn = true;
   state.source = 'UTILITY';
@@ -268,6 +329,20 @@ addEventListener('pointermove', e => {
   }
   tooltip.style.left = `${e.clientX + 14}px`;
   tooltip.style.top = `${e.clientY + 10}px`;
+});
+
+// double-click: focus the camera on whatever you hit (equipment or floor)
+addEventListener('dblclick', e => {
+  if (e.target !== renderer.domElement || choreo.active) return;
+  pointer.set((e.clientX / vw) * 2 - 1, -(e.clientY / vh) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(scene.children, true);
+  const hit = hits.find(h => h.object.visible && !h.object.isSprite);
+  if (!hit) return;
+  const p = hit.point.clone();
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  const dist = Math.max(3, camera.position.distanceTo(p) * 0.45);
+  flyToPose(p.clone().add(dir.multiplyScalar(dist)), p, 0.9);
 });
 
 let downPos = null;
@@ -521,7 +596,12 @@ function step() {
   animateBlink(t);
   flows?.update(dt, t);
   if (choreo.active) choreo.update(dt);
-  else { updateFlight(dt); controls.update(); }
+  else {
+    updateFlight(dt);
+    controls.update();
+    if (camera.position.y < 0.35) camera.position.y = 0.35;   // never dig under the slab
+    if (controls.target.y < 0) controls.target.y = 0;
+  }
   composer.render();
   if (recorder) recorder.compose(dt);
 }
@@ -561,6 +641,13 @@ setTimeout(() => {
   };
   window.__place = mapHandlers.onPlace;   // test hook
   document.getElementById('btnSiteMap').addEventListener('click', () => openSiteMap(facility, state.cfg, mapHandlers));
+  for (const id of ['ovHeat', 'ovPower', 'ovAir', 'ovRed']) {
+    document.getElementById(id).addEventListener('input', e => {
+      plantOv[{ ovHeat: 'heat', ovPower: 'power', ovAir: 'air', ovRed: 'red' }[id]] = e.target.value;
+      if (state.sceneKey === 'custom') rebuildCustom();
+      else if (state.sceneKey !== 'database') build3D(SCENES[state.sceneKey]);
+    });
+  }
   document.getElementById('mapClose').addEventListener('click', closeSiteMap);
   document.getElementById('mapOverlay').addEventListener('click', e => { if (e.target.id === 'mapOverlay') closeSiteMap(); });
   initAgent(() => ({ cfg: state.cfg, stats: facility?.stats ?? {} }));

@@ -1,8 +1,8 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js?b43';
-import { comp, kw } from './catalog.js?b43';
+import * as B from './builders.js?b44';
+import { comp, kw } from './catalog.js?b44';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the

@@ -5,7 +5,7 @@
 // it on the property and the 3D scene rebuilds with your placement (power
 // paths and exhaust re-derive). The camera is locked to bird's-eye: you can't
 // zoom out past the block.
-import { comp } from './catalog.js?b43';
+import { comp } from './catalog.js?b44';
 
 let map = null;
 let equipLayer = null;

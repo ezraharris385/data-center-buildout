@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Data Center Buildout — 3D Operations Studio</title>
-<link rel="stylesheet" href="css/style.css?b43">
+<link rel="stylesheet" href="css/style.css?b44">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏭</text></svg>">
@@ -33,7 +33,7 @@
     <span class="brand-mark">▣</span>
     <span class="brand-name">DATA CENTER BUILDOUT</span>
     <span class="brand-tag">3D Operations Studio</span>
-    <span class="build-tag" id="buildTag">build 43</span>
+    <span class="build-tag" id="buildTag">build 44</span>
   </div>
   <nav id="tabs">
     <button class="tab active" data-scene="hyperscale">Hyperscale</button>
@@ -84,6 +84,35 @@
     <label class="toggle"><input type="checkbox" id="tglRoof"><span class="tswitch"></span>Roof &amp; walls</label>
     <label class="toggle"><input type="checkbox" id="tglContain" checked><span class="tswitch"></span>Aisle containment</label>
     <label class="toggle"><input type="checkbox" id="tglLabels" checked><span class="tswitch"></span>Zone labels</label>
+  </div>
+
+  <div class="panel-section" id="plantSection">
+    <div class="panel-head">PLANT — NON-IT OVERRIDES</div>
+    <div class="learn-hint" style="margin:0 0 8px">Defaults are optimized per build. Override to compare.</div>
+    <div class="bld-label">Heat rejection</div>
+    <select id="ovHeat">
+      <option value="auto">Auto (optimized)</option>
+      <option value="dry">Adiabatic dry coolers</option>
+      <option value="chillers">Air-cooled chillers</option>
+    </select>
+    <div class="bld-label">Power topology</div>
+    <select id="ovPower">
+      <option value="auto">Auto (optimized)</option>
+      <option value="ups">Central UPS + batteries</option>
+      <option value="bess">DC + BESS ride-through</option>
+    </select>
+    <div class="bld-label">Air supply temp</div>
+    <select id="ovAir">
+      <option value="auto">Auto (optimized)</option>
+      <option value="std">24 °C conservative</option>
+      <option value="allow">27 °C ASHRAE allowable</option>
+    </select>
+    <div class="bld-label">Redundancy (gen + cooling)</div>
+    <select id="ovRed">
+      <option value="n1">N+1 (default)</option>
+      <option value="n">N only</option>
+      <option value="2n">2N</option>
+    </select>
   </div>
 
   <div class="panel-section">
@@ -219,6 +248,6 @@
 
 <canvas id="scene3d"></canvas>
 
-<script type="module" src="js/main.js?b43"></script>
+<script type="module" src="js/main.js?b44"></script>
 </body>
 </html>
