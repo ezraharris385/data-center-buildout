@@ -2,8 +2,8 @@
 // Every builder returns a THREE.Group whose base sits at y=0, centered on its
 // footprint, front facing +Z. Groups carry userData.componentId for the inspector.
 import * as THREE from 'three';
-import { comp, dims, STD, MM, partsFor } from './catalog.js?b42';
-import { mats, blinkMats } from './materials.js?b42';
+import { comp, dims, STD, MM, partsFor } from './catalog.js?b43';
+import { mats, blinkMats } from './materials.js?b43';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 BOX.userData.shared = true; // never disposed on scene teardown
@@ -725,6 +725,25 @@ export function buildCoolingTower(id = 'MEC-004') {
   return { group: g, fans: [{ userData: { hub: fan } }], mistAnchor: new THREE.Vector3(0, H * 0.95, 0) };
 }
 
+// BESS block (BESS-001): 30 ft LFP container with cabinet doors + hazard band
+export function buildBESS(id = 'BESS-001') {
+  const { w: L, d: W, h: H } = dims(id);
+  const g = new THREE.Group();
+  const body = box(L, H * 0.92, W, mats.casing());
+  body.position.y = H * 0.46; g.add(body);
+  const band = box(L + 0.02, 0.18, W + 0.02, accentMat('#e0a12e'));
+  band.position.y = H * 0.78; g.add(band);
+  for (let i = 0; i < 6; i++) {                    // cabinet door seams
+    const seam = box(0.02, H * 0.8, 0.02, mats.gensetDark());
+    seam.position.set(-L / 2 + (i + 0.5) * (L / 6), H * 0.44, W / 2 + 0.005);
+    g.add(seam);
+  }
+  const hvac = box(0.5, H * 0.5, W * 0.8, mats.coilSilver());   // end-mount HVAC
+  hvac.position.set(L / 2 + 0.25, H * 0.35, 0); g.add(hvac);
+  ledStrip(g, 0.4, H * 0.85, W / 2 + 0.01, 3, blinkMats);
+  return tag(g, id);
+}
+
 // TES tank (MEC-007) / fuel tank (FUE-001)
 export function buildTank(id, vertical = true) {
   { const p = buildFromParts(id); if (p) return p.group; }
@@ -820,6 +839,7 @@ export function buildById(id, opts = {}) {
   if (id === 'ELC-008') return buildTransformer(id);
   if (id === 'ELC-009') return buildSTS(id);
   if (id === 'ELC-010') return buildATS(id);
+  if (id === 'BESS-001') return buildBESS(id);
   if (id === 'MEC-003') return buildWaterChiller(id);
   if (id === 'MEC-006') return buildPumpSkid(id);
   if (id === 'MEC-007') return buildTank(id, true);

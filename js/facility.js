@@ -7,9 +7,9 @@
 //   Equipment yard:                 z ∈ [-grayD - yardD, -grayD]
 // Multi-floor: white space repeats on each level at y = floor * floorH.
 import * as THREE from 'three';
-import { STD, dims, comp, kw } from './catalog.js?b42';
-import { mats, blinkMats } from './materials.js?b42';
-import * as B from './builders.js?b42';
+import { STD, dims, comp, kw } from './catalog.js?b43';
+import { mats, blinkMats } from './materials.js?b43';
+import * as B from './builders.js?b43';
 
 /* ---------- canvas label sprite ---------- */
 function makeLabel(text, { size = 44, color = '#9fc9e8', sub = null } = {}) {
@@ -609,6 +609,15 @@ export function buildFacility(scene, cfg, flows) {
     chillPositions.push(new THREE.Vector3(x, 1.2, zc));
     // heat exhausts upward WELL clear of the fan deck — thin fast columns, never a pool
     flows.addHeat(new THREE.Vector3(x, dims(chId).h + 1.4, zc), { count: 16, spread: 0.9, rise: 6.5, size: 0.7, opacity: 0.035 });
+  }
+
+  // BESS blocks (800 VDC platforms): line them along the gray-space wall
+  const nBess = yard.bess ?? 0;
+  for (let i = 0; i < nBess; i++) {
+    const bess = B.buildBESS('BESS-001');
+    const pl = placed('BESS-001', hallW / 2 - 6 - i * 11, yardZ0 - 1.2);
+    bess.position.set(pl.x, 0, pl.z);
+    addPick(bess);
   }
 
   let towerPos = null;

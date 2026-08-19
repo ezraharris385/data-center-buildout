@@ -2,7 +2,7 @@
 // operational flow, and an equipment guide that explains every system in the
 // current facility plus the cycles (power, cooling, air) that connect them.
 import * as THREE from 'three';
-import { comp, kw } from './catalog.js?b42';
+import { comp, kw } from './catalog.js?b43';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const fmtMW = v => v >= 1000 ? `${(v / 1000).toFixed(1)} MW` : `${Math.round(v)} kW`;
@@ -159,6 +159,7 @@ const ROLES = [
   ['Dry cooler', 'A giant radiator: closed-loop fluid to air, zero water use. The standard partner for direct liquid cooling.'],
   ['Pump skid', 'Circulates the chilled/condenser water loops — the circulatory system of the thermal plant.'],
   ['Thermal storage', 'A tank of cold water made off-peak — rides through chiller restarts and shaves peak demand.'],
+  ['BESS', 'Battery energy storage block — LFP cells in a container. On 800 VDC rack-scale builds it carries the ride-through that central UPS strings would otherwise provide.'],
   ['Storage tank', 'On-site diesel storage. Runtime = gallons ÷ burn rate; refuel contracts are part of the uptime story.'],
   ['Wire basket', 'Open cable tray for copper runs above the racks.'],
   ['Fiber raceway', 'Protected duct for fiber — the amber channel with gentle bend radii everywhere.'],

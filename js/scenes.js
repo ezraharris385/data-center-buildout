@@ -1,5 +1,5 @@
 // scenes.js — the four facility archetypes, expressed as configs for the composer.
-import * as B from './builders.js?b42';
+import * as B from './builders.js?b43';
 
 export const SCENES = {
   /* -------- HYPERSCALE: single-tenant AI factory, liquid-cooled NVL72 pods -------- */

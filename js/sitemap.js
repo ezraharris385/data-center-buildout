@@ -5,7 +5,7 @@
 // it on the property and the 3D scene rebuilds with your placement (power
 // paths and exhaust re-derive). The camera is locked to bird's-eye: you can't
 // zoom out past the block.
-import { comp } from './catalog.js?b42';
+import { comp } from './catalog.js?b43';
 
 let map = null;
 let equipLayer = null;
@@ -43,13 +43,14 @@ const STYLE = {
   'MEC': { color: '#39c2ff', label: 'Heat rejection', drag: true },
   'ELC-008': { color: '#b06cff', label: 'Transformers', drag: true },
   'FUE': { color: '#9aa4b2', label: 'Fuel', drag: true },
+  'BESS': { color: '#e0a12e', label: 'BESS', drag: true },
   'RCK': { color: '#3ddc84', label: 'Rack rows', drag: false },
   'LCL': { color: '#2fd1c0', label: 'CDUs', drag: false },
 };
 
 function styleFor(id) {
   if (id.startsWith('ELC-008')) return STYLE['ELC-008'];
-  for (const k of ['BKP', 'MEC', 'FUE', 'RCK', 'LCL']) if (id.startsWith(k)) return STYLE[k];
+  for (const k of ['BKP', 'MEC', 'FUE', 'BESS', 'RCK', 'LCL']) if (id.startsWith(k)) return STYLE[k];
   return null;
 }
 

@@ -4,8 +4,8 @@
 //      (capacity, redundancy, runtime, PUE) — always available, no network.
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
-import { comp, kw, design } from './catalog.js?b42';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b42';
+import { comp, kw, design } from './catalog.js?b43';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b43';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
@@ -71,6 +71,13 @@ export function analyze(cfg, stats) {
     if (site.crahNeed > 0) warn(`Air-cooled platform: needs ~${site.crahNeed} CW146-class air handlers for ${fmt(itKW)} IT — at this density rear-door HX or fan walls are the realistic fit-out; perimeter wall space caps the drawing at ${cfg.crahCount}.`);
     if (site.battCabinets) ok(`Batteries: ${site.battCabinets} cabinets ≈ 5 min ride-through at full ${fmt(itKW)} IT (scales live in the failover sim).`);
 
+    // balance-of-plant optimization (everything that isn't the chip)
+    if (site.bop) {
+      ok(`Balance of plant optimized to this platform → PUE ${site.bop.pue}${site.bop.wue ? `, WUE ~${site.bop.wue} L/kWh (adiabatic assist)` : ', WUE ~0 (dry rejection)'}:`);
+      for (const n of site.bop.notes) ok(`• ${n}`);
+      if (site.bop.dc800) ok(`BESS ride-through replaces central UPS strings: ${cfg.yard.bess} × 2 MWh LFP blocks cover ~5 min at full IT load (NFPA 855 siting on the pad).`);
+    }
+
     // platform-specific physical & usage engineering
     const chip = cfg.chip;
     if (chip) {
@@ -80,7 +87,7 @@ export function analyze(cfg, stats) {
       if (psf > 300) warn(`Floor loading: ${chip.rackKg} kg on a ${(fpM2 * 10.764).toFixed(1)} SF footprint ≈ ${psf} psf — Design Studio flags AI/liquid rows above 300 psf (375 psf recommended slab). The budget's slab reinforcement goes under these rows.`);
       else ok(`Floor loading ≈ ${psf} psf — inside typical industrial slab capacity; reinforcement allowance stays contingency.`);
       ok(`Scale-up domain: ${chip.domain === 72 ? 'one 72-GPU domain per rack — cross-rack traffic is scale-out only, so the fabric is leaf/spine between rows' : '8-GPU nodes — ALL cross-node training traffic rides the scale-out fabric; expect denser ToR/leaf switching per row'}.`);
-      ok(`Power delivery: ${chip.volts} — ${chip.volts.includes('48') ? 'rack-scale power shelves on a DC busbar; fewer breakers, busway plug-ins sized per rack' : 'conventional PDU whips from the busway; more branch circuits, standard colo practice'}.`);
+      ok(`Power delivery: ${chip.volts} — ${chip.volts.includes('VDC') ? 'rack-scale DC busbar (power shelves in-rack); fewer breakers, busway plug-ins sized per rack' : 'conventional PDU whips from the busway; more branch circuits, standard colo practice'}.`);
       ok(`Usage profile: ${chip.use}.`);
       if (!cfg.cooling.includes('liquid') && cfg.rows.inRowEvery) ok(`Air fit-out: in-row coolers every ${cfg.rows.inRowEvery}th slot + cold-aisle containment (visible in the rows) carry the load the perimeter CRAHs can't.`);
     }

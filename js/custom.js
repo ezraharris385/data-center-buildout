@@ -1,8 +1,8 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js?b42';
-import { comp, kw } from './catalog.js?b42';
+import * as B from './builders.js?b43';
+import { comp, kw } from './catalog.js?b43';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
@@ -164,14 +164,49 @@ export function setPlacement(siteKey, instKey, x, z) {
 }
 export function clearPlacement(siteKey) { delete placement[siteKey]; }
 
+/* Balance-of-plant optimizer: everything that ISN'T the chip, tuned to the chip.
+   Levers (Design Studio efficiency model + engineering practice):
+   - Heat rejection tech: DLC platforms -> adiabatic dry coolers (compressor-free
+     year-round in a temperate climate, -0.02 PUE, WUE ~0.15); air platforms ->
+     air-cooled chillers with waterside economizer
+   - Air-side sizing: liquid halls only need fan-walls for the (1-liquidShare)
+     air fraction, not a full CRAH fleet
+   - Power topology: 800 VDC rack-scale platforms -> DC distribution + BESS
+     ride-through (fewer conversion stages, -0.01 PUE); 54 VDC / AC platforms
+     keep central UPS + Li-ion cabinets
+   - Air optimization: containment + 27 C supply (ASHRAE A1 allowable) on air
+     platforms (-0.03 PUE vs generic hybrid) */
+export function bopFor(chip) {
+  const liquid = chip.cooling === 'liquid';
+  const dc800 = (chip.volts ?? '').includes('800 VDC');
+  const base = liquid ? 1.2 : 1.32;
+  let pue = base - (base - 1.06) * 0.55 * (chip.liquidShare ?? 0);
+  const adiabatic = liquid;
+  if (adiabatic) pue -= 0.02;
+  const airOpt = !liquid;
+  if (airOpt) pue -= 0.03;
+  if (dc800) pue -= 0.01;
+  pue = Math.max(1.07, Math.round(pue * 100) / 100);
+  return {
+    pue, adiabatic, dc800, airOpt,
+    wue: adiabatic ? 0.15 : 0,
+    heatRejId: liquid ? 'MEC-005' : 'MEC-001',
+    notes: [
+      liquid ? 'Adiabatic dry coolers — compressor-free year-round in Chicago (design WB 78 °F)' :
+               'Air-cooled chillers + waterside economizer (free cooling below ~45 °F)',
+      liquid ? `Fan-walls sized to the ${(100 - (chip.liquidShare ?? 0) * 100).toFixed(0)}% air-share only — not a full CRAH fleet` :
+               'Full containment + 27 °C supply air (ASHRAE A1 allowable)',
+      dc800 ? '800 VDC distribution + BESS ride-through — fewer conversion stages than central UPS' :
+              'Central UPS blocks + Li-ion cabinets (54 VDC shelves take it from the busway)',
+    ],
+  };
+}
+
 // shared sizing math: what this chip deploys inside the active site's confines
 export function versionStats(chip, s = activeSite()) {
   const liquid = chip.cooling === 'liquid';
-  // Design Studio efficiency model: base PUE by cooling arch (dlc 1.2, hybrid
-  // air 1.32), with liquid heat-share pulling toward the 1.06 liquid floor at
-  // weight 0.55. Climate adj: temperate = 0 (Chicago metro sites).
-  const base = liquid ? 1.2 : 1.32;
-  const pue = Math.round((base - (base - 1.06) * 0.55 * (chip.liquidShare ?? 0)) * 100) / 100;
+  // PUE comes from the per-chip balance-of-plant optimizer (bopFor)
+  const pue = bopFor(chip).pue;
   const itBudgetKW = Math.floor(Math.min(s.utilityMW * 1000 / pue, s.upsMW * 1000));
   const maxRacks = Math.floor(itBudgetKW / chip.kwRack);
   return {
@@ -192,6 +227,7 @@ export function siteVersionConfig(chipKey) {
   // The workbook's 24 MW critical IT assumed PUE 1.25; efficient liquid plants
   // recover that gap as extra compute, air plants pay the tax.
   const { liquid, pue, maxRacks } = versionStats(chip);
+  const bop = bopFor(chip);
   // rows auto-fit to the bay width: 34 slots with a mid-row egress break every 17,
   // in-row coolers every 5th slot on air builds
   const racksPerRow = 34;
@@ -232,7 +268,7 @@ export function siteVersionConfig(chipKey) {
       <b>Optimized:</b> ${s.utilityMW} MW feed ÷ PUE ${pue} → <b>${racksNominal.toLocaleString()} racks · ${gpus.toLocaleString()} GPUs</b> at
       ${chip.kwRack} kW/rack (workbook baseline: ${s.criticalITMW} MW @ PUE ${s.designPUE}). <b>Usage:</b> ${chip.use}. <b>Physical:</b> ${chip.rackKg} kg/rack,
       ${chip.domain}-GPU scale-up domain, ${chip.volts}${liquid ? ', hot-aisle contained DLC' : ', cold-aisle contained air + in-row coolers'}.
-      Plant sized to this platform: ${heatUnits}× 1 MW heat rejection (N+1), ${genCount}× 3 MW gensets (N+1)${liquid ? '' : `, ${crahNeed} CRAH equivalents`}, PUE ${pue}.
+      <b>Balance of plant (optimized for this chip):</b> ${bop.notes.join('; ')}. Plant sized to this platform: ${heatUnits}× 1 MW heat rejection (N+1), ${genCount}× 3 MW gensets (N+1)${liquid ? '' : `, ${crahNeed} CRAH equivalents`}, PUE ${pue}.
       ${footNote}`,
     podName: 'ROW',
     cooling: chip.cooling,
@@ -254,12 +290,14 @@ export function siteVersionConfig(chipKey) {
     parcel: s.parcel ?? null,
     grayD: s.grayD,
     yardD,
-    crahCount: liquid ? 0 : Math.min(crahNeed, small ? 6 : 14),
-    include: { busB: true, trays: true, pdus: !small, crah: !liquid, containment: true },
+    crahCount: liquid
+      ? Math.min(Math.max(1, Math.ceil(itKW * (1 - (chip.liquidShare ?? 0)) / 146)), small ? 4 : 8)
+      : Math.min(crahNeed, small ? 6 : 14),
+    include: { busB: true, trays: true, pdus: !small, crah: true, containment: true },
     gray: small ? [
       { id: 'ELC-006', count: 1, opts: { sections: 3 } },
-      { id: 'ELC-001', count: Math.min(upsLineups, 2) },
-      { id: 'ELC-005', count: Math.min(battCabinets, 4) },
+      { id: 'ELC-001', count: bop.dc800 ? 1 : Math.min(upsLineups, 2) },
+      { id: 'ELC-005', count: bop.dc800 ? 2 : Math.min(battCabinets, 4) },
       { id: 'ELC-010', count: 1 },
     ] : [
       { id: 'ELC-007', count: 1, opts: { sections: 3 } },
@@ -272,7 +310,8 @@ export function siteVersionConfig(chipKey) {
     yard: {
       transformers: small ? 1 : 2,
       gensets: { id: 'BKP-003', count: Math.min(genCount, small ? 5 : 14) },
-      chillers: { id: liquid ? 'MEC-005' : 'MEC-001', count: Math.min(heatUnits, small ? 6 : 26) },
+      chillers: { id: bop.heatRejId, count: Math.min(heatUnits, small ? 6 : 26) },
+      bess: bop.dc800 ? Math.min(4, Math.ceil(itKW * (5 / 60) / 2000) + 1) : 0,
       tower: false, tes: false, fuel: small ? 1 : 2,
     },
     siteOverrides: {
@@ -282,6 +321,7 @@ export function siteVersionConfig(chipKey) {
       tfKW: s.utilityMW * 1000,
       battCabinets, crahNeed: liquid ? 0 : crahNeed,
       heatUnits, footprintAssumed: !!s.footprintAssumed,
+      bop: { pue: bop.pue, wue: bop.wue, adiabatic: bop.adiabatic, dc800: bop.dc800, notes: bop.notes },
       measured: !!s.measured, parcelAc: s.parcel?.acres ?? null,
     },
     tourRackLine: `${chip.label} racks`,
