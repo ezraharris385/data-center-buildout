@@ -7,9 +7,9 @@
 //   Equipment yard:                 z ∈ [-grayD - yardD, -grayD]
 // Multi-floor: white space repeats on each level at y = floor * floorH.
 import * as THREE from 'three';
-import { STD, dims, comp, kw } from './catalog.js?b41';
-import { mats, blinkMats } from './materials.js?b41';
-import * as B from './builders.js?b41';
+import { STD, dims, comp, kw } from './catalog.js?b42';
+import { mats, blinkMats } from './materials.js?b42';
+import * as B from './builders.js?b42';
 
 /* ---------- canvas label sprite ---------- */
 function makeLabel(text, { size = 44, color = '#9fc9e8', sub = null } = {}) {
@@ -545,6 +545,14 @@ export function buildFacility(scene, cfg, flows) {
     }
   }
 
+  // user-dragged placements from the site map (scene meters), keyed id#seq
+  const seqCounters = {};
+  const placed = (id, defX, defZ) => {
+    const k = `${id}#${seqCounters[id] = (seqCounters[id] ?? -1) + 1}`;
+    const o = cfg.placement?.[k];
+    return o ? { x: o.x, z: o.z } : { x: defX, z: defZ };
+  };
+
   /* ---------------- yard ---------------- */
   const yard = cfg.yard;
   const yardZ0 = -grayD - 2;
@@ -553,10 +561,11 @@ export function buildFacility(scene, cfg, flows) {
   const nTf = yard.transformers ?? 2;
   for (let i = 0; i < nTf; i++) {
     const tf = B.buildTransformer('ELC-008');
-    const x = -hallW / 2 + 6 + i * ((hallW - 12) / Math.max(1, nTf - 1));
-    tf.position.set(x, 0, yardZ0 - 1.5);
+    const plT = placed('ELC-008', -hallW / 2 + 6 + i * ((hallW - 12) / Math.max(1, nTf - 1)), yardZ0 - 1.5);
+    const x = plT.x;
+    tf.position.set(x, 0, plT.z);
     addPick(tf);
-    tfPositions.push(new THREE.Vector3(x, 1.9, yardZ0 - 1.5));
+    tfPositions.push(new THREE.Vector3(x, 1.9, plT.z));
   }
 
   // gensets (long axis along Z, radiators away from the building)
@@ -567,16 +576,17 @@ export function buildFacility(scene, cfg, flows) {
   const genPositions = [];
   for (let i = 0; i < nGen; i++) {
     const { group, fans, exhaustAnchor } = genId === 'BKP-003' ? B.buildGenset(genId) : B.buildOpenGenset(genId);
-    const x = -hallW / 2 + 2 + i * (genW + 2.4);
+    const plG = placed(genId, -hallW / 2 + 2 + i * (genW + 2.4), genRowZ);
+    const x = plG.x, gz = plG.z;
     group.rotation.y = Math.PI / 2;
-    group.position.set(x, 0, genRowZ);
+    group.position.set(x, 0, gz);
     addPick(group);
     result.gensets.push({ group, fans });
     // parts-built fans carry their own hub (spin about local y); legacy procedural fans spin about z
     flows.addFans(fans.map(fn => fn.userData?.hub ? fn : ({ userData: { hub: fn, axis: 'z' } })));
     const wp = exhaustAnchor.clone().applyEuler(new THREE.Euler(0, Math.PI / 2, 0)).add(group.position);
     flows.addExhaust(wp);
-    genPositions.push(new THREE.Vector3(x, 1.6, genRowZ));
+    genPositions.push(new THREE.Vector3(x, 1.6, gz));
   }
 
   // chillers / dry coolers: rows beyond the gensets, wrapping when needed
@@ -591,8 +601,8 @@ export function buildFacility(scene, cfg, flows) {
     const { group, fans } = B.buildChiller(chId);
     const col = i % chPerRow, rowI = Math.floor(i / chPerRow);
     const inRow = Math.min(chPerRow, nCh - rowI * chPerRow);
-    const x = -(inRow - 1) * chSpacing / 2 + col * chSpacing;
-    const zc = chillRowZ - rowI * (chW + 2.6);
+    const plC = placed(chId, -(inRow - 1) * chSpacing / 2 + col * chSpacing, chillRowZ - rowI * (chW + 2.6));
+    const x = plC.x, zc = plC.z;
     group.position.set(x, 0, zc);
     addPick(group);
     flows.addFans(fans.map(fn => fn.userData.hub ? fn : { userData: { hub: fn } }));
@@ -621,7 +631,8 @@ export function buildFacility(scene, cfg, flows) {
   const nFuel = yard.fuel ?? 0;
   for (let i = 0; i < nFuel; i++) {
     const tank = B.buildTank('FUE-001', false);
-    tank.position.set(hallW / 2 + 7, 0, genRowZ - 2 + i * 4.2);
+    const plF = placed('FUE-001', hallW / 2 + 7, genRowZ - 2 + i * 4.2);
+    tank.position.set(plF.x, 0, plF.z);
     tank.rotation.y = Math.PI / 2;
     addPick(tank);
   }

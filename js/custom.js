@@ -1,8 +1,8 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js?b41';
-import { comp, kw } from './catalog.js?b41';
+import * as B from './builders.js?b42';
+import { comp, kw } from './catalog.js?b42';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
@@ -156,6 +156,14 @@ const FT = 0.3048;
 
 export function activeSite() { return SITES[custom.site] ?? SITE_77N; }
 
+/* user-dragged equipment placements from the site map, per site:
+   placement[siteKey] = { 'BKP-003#2': {x, z}, ... }  (scene meters) */
+export const placement = {};
+export function setPlacement(siteKey, instKey, x, z) {
+  (placement[siteKey] ??= {})[instKey] = { x, z };
+}
+export function clearPlacement(siteKey) { delete placement[siteKey]; }
+
 // shared sizing math: what this chip deploys inside the active site's confines
 export function versionStats(chip, s = activeSite()) {
   const liquid = chip.cooling === 'liquid';
@@ -278,6 +286,7 @@ export function siteVersionConfig(chipKey) {
     },
     tourRackLine: `${chip.label} racks`,
     chip,
+    placement: placement[custom.site] ?? {},
   };
 }
 

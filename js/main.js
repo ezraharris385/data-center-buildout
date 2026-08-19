@@ -7,18 +7,18 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js?b41';
-import { animateBlink } from './materials.js?b41';
-import { FlowSystem } from './flows.js?b41';
-import { buildFacility } from './facility.js?b41';
-import { SCENES } from './scenes.js?b41';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b41';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b41';
-import { initDatabase, setDatabaseVisible } from './database.js?b41';
-import { customConfig, initBuilder } from './custom.js?b41';
-import { initAgent } from './agent.js?b41';
-import { openSiteMap, closeSiteMap } from './sitemap.js?b41';
-import * as UI from './ui.js?b41';
+import { loadCatalog, comp } from './catalog.js?b42';
+import { animateBlink } from './materials.js?b42';
+import { FlowSystem } from './flows.js?b42';
+import { buildFacility } from './facility.js?b42';
+import { SCENES } from './scenes.js?b42';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b42';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b42';
+import { initDatabase, setDatabaseVisible } from './database.js?b42';
+import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b42';
+import { initAgent } from './agent.js?b42';
+import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b42';
+import * as UI from './ui.js?b42';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
@@ -546,7 +546,21 @@ setTimeout(() => {
 
   initDatabase();
   initBuilder(rebuildCustom);
-  document.getElementById('btnSiteMap').addEventListener('click', () => openSiteMap(facility, state.cfg));
+  const mapHandlers = {
+    onPlace: (key, x, z) => {
+      setPlacement(custom.site, key, x, z);
+      rebuildCustom();
+      refreshSiteMap(facility);
+      updateTelemetry();
+    },
+    onReset: () => {
+      clearPlacement(custom.site);
+      rebuildCustom();
+      refreshSiteMap(facility);
+    },
+  };
+  window.__place = mapHandlers.onPlace;   // test hook
+  document.getElementById('btnSiteMap').addEventListener('click', () => openSiteMap(facility, state.cfg, mapHandlers));
   document.getElementById('mapClose').addEventListener('click', closeSiteMap);
   document.getElementById('mapOverlay').addEventListener('click', e => { if (e.target.id === 'mapOverlay') closeSiteMap(); });
   initAgent(() => ({ cfg: state.cfg, stats: facility?.stats ?? {} }));

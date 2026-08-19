@@ -332,3 +332,5 @@ body.tour-mode #hintbar, body.tour-mode #flowCard { display: none !important; }
 .ml-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .ml-warn { color: var(--amber); font-size: 10.5px; margin-left: auto; }
 .leaflet-container { font: 11px var(--sans); }
+.drag-dot { background: rgba(255,255,255,.9); border: 3px dotted #0a0e14; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,.8); cursor: grab; }
+.map-reset { margin-left: 10px; border: 1px solid var(--panel-border); background: rgba(255,255,255,.05); color: var(--amber); font: 600 11px var(--sans); padding: 3px 10px; border-radius: 6px; cursor: pointer; }
