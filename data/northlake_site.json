@@ -1,5 +1,5 @@
 {
- "name": "Lehigh Ave (measured)",
+ "name": "North Ave, Northlake (measured KMZ)",
  "centroid": {
   "lat": 41.90668098233049,
   "lng": -87.90042756703855
@@ -68,5 +68,15 @@
    -87.90009389710795
   ]
  ],
- "source": "User KMZs: Lehigh Building.kmz / Lehigh Boundary.kmz (Google Earth Pro)"
+ "source": "User KMZs: Lehigh Building.kmz / Lehigh Boundary.kmz (Google Earth Pro)",
+ "mapRot": [
+  [
+   0,
+   1
+  ],
+  [
+   1,
+   0
+  ]
+ ]
 }

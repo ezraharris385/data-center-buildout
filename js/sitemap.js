@@ -5,27 +5,37 @@
 // it on the property and the 3D scene rebuilds with your placement (power
 // paths and exhaust re-derive). The camera is locked to bird's-eye: you can't
 // zoom out past the block.
-import { comp } from './catalog.js?b44';
+import { comp } from './catalog.js?b45';
 
 let map = null;
 let equipLayer = null;
+let baseLayer = null;
 let siteGeo = null;
+let currentGeoFile = null;
+const geoCache = {};
 let onPlaceCb = null;
 
 const M_LAT = 111132, M_LNG0 = 111320;
 
 function cosLat(geo) { return Math.cos(geo.centroid.lat * Math.PI / 180); }
 
+// scene→world rotation per site: [E, N] = M · [x, z−zc]  (M from the geo file)
 function toLatLng(x, z, centerZ, geo) {
-  const E = (z - centerZ);
-  const N = x;
+  const dz = z - centerZ;
+  const m = geo.mapRot ?? [[0, 1], [1, 0]];
+  const E = m[0][0] * x + m[0][1] * dz;
+  const N = m[1][0] * x + m[1][1] * dz;
   return [geo.centroid.lat + N / M_LAT, geo.centroid.lng + E / (M_LNG0 * cosLat(geo))];
 }
 
 function toScene(lat, lng, centerZ, geo) {
   const N = (lat - geo.centroid.lat) * M_LAT;
   const E = (lng - geo.centroid.lng) * M_LNG0 * cosLat(geo);
-  return { x: N, z: E + centerZ };
+  const m = geo.mapRot ?? [[0, 1], [1, 0]];
+  const det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+  const x = (m[1][1] * E - m[0][1] * N) / det;
+  const dz = (-m[1][0] * E + m[0][0] * N) / det;
+  return { x, z: dz + centerZ };
 }
 
 function rectLatLngs(x, z, w, d, rotated, centerZ, geo) {
@@ -111,25 +121,34 @@ export async function openSiteMap(facility, cfg, { onPlace = null, onReset = nul
     and power/exhaust paths re-derive from your layout. <button id="mapReset" class="map-reset">↺ Reset layout</button>`;
   document.getElementById('mapReset').addEventListener('click', () => onReset?.());
 
-  if (!siteGeo) siteGeo = await (await fetch('data/lehigh_site.json')).json();
+  const geoFile = cfg.siteOverrides.geoFile;
+  if (!geoFile) { note.textContent = 'No geometry file for this site.'; return; }
+  if (!geoCache[geoFile]) geoCache[geoFile] = await (await fetch(geoFile)).json();
+  siteGeo = geoCache[geoFile];
   const L = window.L;
   if (!L) { note.textContent = 'Leaflet failed to load (offline?).'; return; }
 
+  const anchor = siteGeo.parcel ?? siteGeo.building;
   if (!map) {
     map = L.map('siteMap', {
       zoomControl: true, attributionControl: true,
-      minZoom: 17, maxZoom: 21,                       // bird's-eye only — never above the block
-      maxBounds: L.latLngBounds(siteGeo.parcel).pad(8),
+      minZoom: 16, maxZoom: 21,                       // bird's-eye only — never above the block
       maxBoundsViscosity: 0.8,
     });
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 21, maxNativeZoom: 19,
       attribution: 'Imagery © Esri — Source: Esri, Maxar, Earthstar Geographics',
     }).addTo(map);
-    L.polygon(siteGeo.parcel, { color: '#ffc233', weight: 2.5, fill: false, dashArray: '6 4' })
-      .addTo(map).bindTooltip('Parcel — 0.59 ac (measured)');
+  }
+  if (currentGeoFile !== geoFile) {
+    currentGeoFile = geoFile;
+    if (baseLayer) baseLayer.remove();
+    baseLayer = L.layerGroup().addTo(map);
+    map.setMaxBounds(L.latLngBounds(anchor).pad(8));
+    if (siteGeo.parcel) L.polygon(siteGeo.parcel, { color: '#ffc233', weight: 2.5, fill: false, dashArray: '6 4' })
+      .addTo(baseLayer).bindTooltip('Parcel (measured)');
     L.polygon(siteGeo.building, { color: '#7fd4ff', weight: 2, fillColor: '#7fd4ff', fillOpacity: 0.08 })
-      .addTo(map).bindTooltip('Building — 12,109 SF (measured)');
+      .addTo(baseLayer).bindTooltip(siteGeo.name ?? 'Building (measured)');
   }
 
   drawEquipment(facility);
@@ -139,7 +158,7 @@ export async function openSiteMap(facility, cfg, { onPlace = null, onReset = nul
   document.getElementById('mapLegend').innerHTML =
     legend + `<span class="ml-warn">outside the amber dashed line = off-parcel</span>`;
 
-  const b = window.L.latLngBounds(siteGeo.parcel);
+  const b = window.L.latLngBounds(siteGeo.parcel ?? siteGeo.building);
   setTimeout(() => {
     map.invalidateSize();
     map.setView(b.getCenter(), 18, { animate: false });

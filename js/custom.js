@@ -1,8 +1,8 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js?b44';
-import { comp, kw } from './catalog.js?b44';
+import * as B from './builders.js?b45';
+import { comp, kw } from './catalog.js?b45';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
@@ -69,29 +69,36 @@ export const CHIP_OPTIONS = [
    generators N+1 36 MW, UPS 30 MW. Layout directives: demising wall every 1/3,
    office in each corner, 50×50 ft column bays. */
 export const SITE_77N = {
-  key: '77n', name: '77 N Ave & Niles',
-  buildingW_ft: 271, buildingD_ft: 500, clearH_ft: 32,
-  grossSF: 135650, officeSF: 5160,
-  utilityMW: 30, criticalITMW: 24, designPUE: 1.25,
-  genMW: 36, upsMW: 30, halls: 3, columnFt: 50,
-  dockDoors: 13, driveIns: 2, grayD: 10,
-  footprintAssumed: true,
-};
-
-/* Lehigh Ave building — MEASURED from the user's Google Earth KMZs (building +
-   parcel polygons). Footprint ≈ 126×123 ft irregular, 12,109 SF, on a 0.59-acre
-   parcel (224×121 ft). NOTE: this is ~11× smaller than the 30 MW workbook shell —
-   space, not power, binds this site. Power program assumed = same 30 MW study. */
-export const SITE_LEHIGH = {
-  key: 'lehigh', name: 'Lehigh Ave (measured)',
+  key: '77n', name: 'North Ave, Northlake (measured KMZ)',
+  // The user's KMZ polygons live at 55 E North Ave, Northlake: 12,109 SF
+  // building (126×123 ft) on a 0.59 ac parcel. Small shell — space binds.
+  // Power program ASSUMED = same 30 MW study until told otherwise.
   buildingW_ft: 126, buildingD_ft: 123, clearH_ft: 28,
   grossSF: 12109, officeSF: 0,
   utilityMW: 30, criticalITMW: 24, designPUE: 1.25,
   genMW: 36, upsMW: 30, halls: 1, columnFt: 0,
   dockDoors: 2, driveIns: 0, grayD: 6,
   parcel: { w_ft: 224, d_ft: 121, dx_ft: -20, dz_ft: 15, acres: 0.59 },
-  measured: true,
-};
+  measured: true, geoFile: 'data/northlake_site.json',
+}
+
+/* Lehigh Ave building — MEASURED from the user's Google Earth KMZs (building +
+   parcel polygons). Footprint ≈ 126×123 ft irregular, 12,109 SF, on a 0.59-acre
+   parcel (224×121 ft). NOTE: this is ~11× smaller than the 30 MW workbook shell —
+   space, not power, binds this site. Power program assumed = same 30 MW study. */
+export const SITE_LEHIGH = {
+  key: 'lehigh', name: 'Lehigh Ave, Niles — 30 MW retrofit',
+  // Footprint from the user's pin (42°01'19.1"N 87°46'47.8"W) + OSM building
+  // way 914110323: 256×549 ft, 138,892 SF traced (workbook: 135,650 SF).
+  // This IS the 30 MW workbook shell — tri-hall, 50×50 bays, corner offices.
+  buildingW_ft: 256, buildingD_ft: 549, clearH_ft: 32,
+  grossSF: 135650, officeSF: 5160,
+  utilityMW: 30, criticalITMW: 24, designPUE: 1.25,
+  genMW: 36, upsMW: 30, halls: 3, columnFt: 50,
+  dockDoors: 13, driveIns: 2, grayD: 10,
+  parcel: null,                       // parcel KMZ pending — building footprint is measured
+  measured: true, geoFile: 'data/niles_site.json',
+}
 
 /* Google Gen-4 AI reference building — from the Design Studio Building Presets
    sheet (published-derived): 500×300 ft, 2 stories, 34 ft clear, 400 psf slab,
@@ -251,15 +258,16 @@ export function siteVersionConfig(chipKey) {
   const yardD = 18 + Math.max(genCount * 0 + 14, 14) + chillRows * 5.2;
 
   // footprint: 77N is slider-driven (assumed split); Lehigh is fixed (measured KMZ)
-  const wFt = s.footprintAssumed ? custom.siteW_ft : s.buildingW_ft;
-  const dFt = s.footprintAssumed ? custom.siteD_ft : s.buildingD_ft;
+  const wFt = s.buildingW_ft, dFt = s.buildingD_ft;   // both sites measured now
   const small = s.grossSF < 20000;                        // compact gray room for small shells
 
-  const footNote = s.measured
-    ? `<i>Footprint ${s.buildingW_ft}×${s.buildingD_ft} ft measured from your KMZ (${s.grossSF.toLocaleString()} SF on a
-       ${s.parcel.acres} ac parcel). Note: the 30 MW workbook describes a 135,650 SF shell — this building is ~11×
-       smaller, so <b>space and yard area bind before power</b>.</i>`
-    : `<i>Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from gross SF — edit below to match the survey.</i>`;
+  const footNote = s.key === 'lehigh'
+    ? `<i>Footprint 256×549 ft from your pin + OSM building trace (138,892 SF vs 135,650 SF workbook — within
+       tracing tolerance). Parcel boundary pending — send a parcel KMZ to complete the site map.</i>`
+    : s.parcel
+      ? `<i>Footprint ${s.buildingW_ft}×${s.buildingD_ft} ft measured from your KMZ (${s.grossSF.toLocaleString()} SF on a
+         ${s.parcel.acres} ac parcel) — space and yard area bind before power on this small shell.</i>`
+      : `<i>Footprint ${s.buildingW_ft}×${s.buildingD_ft} ft.</i>`;
 
   return {
     title: `${s.name} — ${chip.label}`,
@@ -322,7 +330,7 @@ export function siteVersionConfig(chipKey) {
       battCabinets, crahNeed: liquid ? 0 : crahNeed,
       heatUnits, footprintAssumed: !!s.footprintAssumed,
       bop: { pue: bop.pue, wue: bop.wue, adiabatic: bop.adiabatic, dc800: bop.dc800, notes: bop.notes },
-      measured: !!s.measured, parcelAc: s.parcel?.acres ?? null,
+      measured: !!s.measured, parcelAc: s.parcel?.acres ?? null, geoFile: s.geoFile ?? null,
     },
     tourRackLine: `${chip.label} racks`,
     chip,
@@ -390,8 +398,8 @@ export function initBuilder(onChange) {
       <div class="bld-label">Project</div>
       <select id="bldSite">
         <option value="free" ${custom.site === 'free' ? 'selected' : ''}>Freeform sandbox</option>
-        <option value="77n" ${custom.site === '77n' ? 'selected' : ''}>77 N Ave &amp; Niles — 30 MW retrofit</option>
-        <option value="lehigh" ${custom.site === 'lehigh' ? 'selected' : ''}>Lehigh Ave — measured from KMZ</option>
+        <option value="lehigh" ${custom.site === 'lehigh' ? 'selected' : ''}>Lehigh Ave, Niles — 30 MW retrofit</option>
+        <option value="77n" ${custom.site === '77n' ? 'selected' : ''}>North Ave, Northlake — small shell</option>
         <option value="g4" ${custom.site === 'g4' ? 'selected' : ''}>Google Gen-4 AI — reference shell</option>
       </select>
       <div class="bld-label">Compute platform</div>
@@ -407,12 +415,6 @@ export function initBuilder(onChange) {
         <button class="shell-btn ${custom.shell === 'open' ? 'on' : ''}" data-shell="open">Open</button>
       </div>
       <div id="verTable"></div>
-      <div class="ops-row" style="margin-top:10px"><div class="ops-label">Footprint W (ft) <span class="ops-val" id="bldSiteWVal">${custom.siteW_ft}</span></div>
-      <input type="range" id="bldSiteW" min="180" max="420" value="${custom.siteW_ft}" step="1"></div>
-      <div class="ops-row"><div class="ops-label">Footprint L (ft) <span class="ops-val" id="bldSiteDVal">${custom.siteD_ft}</span></div>
-      <input type="range" id="bldSiteD" min="300" max="800" value="${custom.siteD_ft}" step="1"></div>
-      <div class="learn-hint">135,650 SF gross is from the workbook; the W×L split is assumed —
-      set the real dimensions when you have the survey.</div>
     </div>
     <div class="panel-section">
       <div class="panel-head">IT BUILD</div>
@@ -483,7 +485,7 @@ export function initBuilder(onChange) {
   // this is what makes "flip through the chips" visibly rebuild everything
   function activateChip(key) {
     custom.chip = key;
-    if (custom.site === 'free') custom.site = '77n';   // keep Lehigh if it's the active site
+    if (custom.site === 'free') custom.site = 'lehigh';
     document.getElementById('bldSite').value = custom.site;
     document.getElementById('bldChip').value = key;
     renderVersionTable();
@@ -516,7 +518,6 @@ export function initBuilder(onChange) {
   };
   document.getElementById('bldSite').addEventListener('input', e => { custom.site = e.target.value; renderVersionTable(); change(); });
   document.getElementById('bldChip').addEventListener('input', e => activateChip(e.target.value));
-  bind('bldSiteW', 'siteW_ft', { num: true }); bind('bldSiteD', 'siteD_ft', { num: true });
   bind('bldRack', 'rack'); bind('bldRows', 'rows', { num: true }); bind('bldRPR', 'racksPerRow', { num: true });
   bind('bldFloors', 'floors', { num: true }); bind('bldWallH', 'wallH', { num: true }); bind('bldMargin', 'hallMarginX', { num: true });
   bind('bldShell', 'shell');

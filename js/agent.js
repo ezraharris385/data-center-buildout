@@ -4,8 +4,8 @@
 //      (capacity, redundancy, runtime, PUE) — always available, no network.
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
-import { comp, kw, design } from './catalog.js?b44';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b44';
+import { comp, kw, design } from './catalog.js?b45';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b45';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
@@ -101,7 +101,7 @@ export function analyze(cfg, stats) {
       if (!cfg.cooling.includes('liquid') && cfg.rows.inRowEvery) ok(`Air fit-out: in-row coolers every ${cfg.rows.inRowEvery}th slot + cold-aisle containment (visible in the rows) carry the load the perimeter CRAHs can't.`);
     }
     if (site.footprintAssumed) warn(`Footprint ${custom.siteW_ft}×${custom.siteD_ft} ft is assumed from ${site.grossSF.toLocaleString()} SF gross — confirm against survey/ALTA before layout decisions.`);
-      else if (site.measured) ok(`Footprint measured from your Google Earth polygons — ${site.grossSF.toLocaleString()} SF building on a ${site.parcelAc} ac parcel. No footprint assumptions remain.`);
+      else if (site.measured) ok(`Footprint measured (${site.parcelAc ? `KMZ — ${site.grossSF.toLocaleString()} SF on a ${site.parcelAc} ac parcel` : `pin + OSM trace — ${site.grossSF.toLocaleString()} SF; parcel KMZ pending`}). No footprint assumptions remain.`);
 
     /* ----- Design Studio engine: indicative CapEx, annuals, procurement ----- */
     const eng = design();

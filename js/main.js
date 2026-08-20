@@ -7,18 +7,18 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js?b44';
-import { animateBlink } from './materials.js?b44';
-import { FlowSystem } from './flows.js?b44';
-import { buildFacility } from './facility.js?b44';
-import { SCENES } from './scenes.js?b44';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b44';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b44';
-import { initDatabase, setDatabaseVisible } from './database.js?b44';
-import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b44';
-import { initAgent } from './agent.js?b44';
-import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b44';
-import * as UI from './ui.js?b44';
+import { loadCatalog, comp } from './catalog.js?b45';
+import { animateBlink } from './materials.js?b45';
+import { FlowSystem } from './flows.js?b45';
+import { buildFacility } from './facility.js?b45';
+import { SCENES } from './scenes.js?b45';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b45';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b45';
+import { initDatabase, setDatabaseVisible } from './database.js?b45';
+import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b45';
+import { initAgent } from './agent.js?b45';
+import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b45';
+import * as UI from './ui.js?b45';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
