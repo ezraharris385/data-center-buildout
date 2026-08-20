@@ -7,9 +7,9 @@
 //   Equipment yard:                 z ∈ [-grayD - yardD, -grayD]
 // Multi-floor: white space repeats on each level at y = floor * floorH.
 import * as THREE from 'three';
-import { STD, dims, comp, kw } from './catalog.js?b48';
-import { mats, blinkMats } from './materials.js?b48';
-import * as B from './builders.js?b48';
+import { STD, dims, comp, kw } from './catalog.js?b49';
+import { mats, blinkMats } from './materials.js?b49';
+import * as B from './builders.js?b49';
 
 /* ---------- canvas label sprite ---------- */
 function makeLabel(text, { size = 44, color = '#9fc9e8', sub = null } = {}) {
@@ -369,7 +369,9 @@ export function buildFacility(scene, cfg, flows) {
   /* ---------------- white space rows (per floor) ---------------- */
   const protoRack = cfg.rows.builder ? cfg.rows.builder() : B.buildById(rackId, cfg.rows.opts ?? {});
   const rowZs = [];   // { z, facing, floor, yOff }
-  const zStart = aisleOuter + rackD / 2 + 1.2;
+  const fit = cfg.fitout || null;      // interior space program (site builds)
+  const zStart = fit ? fit.pod.z0 + aisleOuter + rackD / 2
+                     : aisleOuter + rackD / 2 + 1.2;
 
   let placedRacks = 0;
   // column z-lines (for row nudging: rows dodge columns instead of losing racks)
@@ -405,7 +407,8 @@ export function buildFacility(scene, cfg, flows) {
       let nudge = 0;
       while (nudge++ < 14 && (rowHitsColumns(z) || rowHitsColumns(z + rackD + aisleShared))) z += 0.35;
 
-      const zLimit = pairsPerHall === Infinity ? hallD - 1.5 : (hallIdx + 1) * hallDepth - 1.2;
+      const zLimit = fit ? fit.pod.z0 + fit.pod.d + 0.5
+        : pairsPerHall === Infinity ? hallD - 1.5 : (hallIdx + 1) * hallDepth - 1.2;
       if (z + pairDepth > zLimit) { zCursors[hallIdx] = z; continue; } // this hall is full
 
       const zA = z;
@@ -804,6 +807,146 @@ export function buildFacility(scene, cfg, flows) {
   }, 0);
   // 0.72 fit-out factor: corridors, egress, MEP galleries, staging inside the halls
   const wsArea = (hallW * hallD - officeInHall) * 0.72;
+
+  // ---- INTERIOR PROGRAM ROOMS -------------------------------------------
+  // The support rooms that make the pod operable. At DLC densities these are
+  // several times LARGER than the white space they serve, which is the whole
+  // point: 27 MW of GB200 fits in 79x51 ft, but needs ~12,000 SF of electrical
+  // and ~9,400 SF of mechanical behind it.
+  if (fit) {
+    const pgroup = new THREE.Group();
+    pgroup.name = 'programRooms';
+    const partH = 3.6, partT = 0.18;
+    for (const rm of fit.rooms) {
+      const cx = rm.x0 + rm.w / 2, cz = rm.z0 + rm.d / 2;
+      const col = new THREE.Color(rm.color);
+
+      // floor tint
+      const fl = new THREE.Mesh(new THREE.PlaneGeometry(rm.w, rm.d),
+        new THREE.MeshStandardMaterial({ color: col, roughness: 0.9, metalness: 0.05,
+          transparent: true, opacity: 0.10 }));
+      fl.rotation.x = -Math.PI / 2;
+      fl.position.set(cx, 0.02, cz);
+      pgroup.add(fl);
+
+      // partition walls (3 sides — open to the pod aisle)
+      const pm = new THREE.MeshStandardMaterial({ color: 0x30363f, roughness: 0.8, metalness: 0.15 });
+      const seg = (w, d, x, z) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, partH, d), pm);
+        m.position.set(x, partH / 2, z); m.castShadow = false; pgroup.add(m);
+      };
+      const wide = rm.w > hallW * 0.8;      // full-width gallery: no side wall
+      seg(rm.w, partT, cx, rm.z0);
+      seg(rm.w, partT, cx, rm.z0 + rm.d);
+      const stripeMat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.5 });
+      if (wide) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(rm.w, 0.14, partT * 1.4), stripeMat);
+        stripe.position.set(cx, partH + 0.07, rm.z0);
+        pgroup.add(stripe);
+      } else {
+        const inner = rm.x0 < 0 ? rm.x0 + rm.w : rm.x0;   // wall facing the pod
+        seg(partT, rm.d, inner, cz);
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(partT * 1.4, 0.14, rm.d), stripeMat);
+        stripe.position.set(inner, partH + 0.07, cz);
+        pgroup.add(stripe);
+      }
+
+      // representative equipment, laid out on real footprints
+      const place = (id, opts, x, z, ry) => {
+        const o = B.buildById(id, opts ?? {});
+        if (!o) return;
+        o.position.set(x, 0, z);
+        if (ry) o.rotation.y = ry;
+        pgroup.add(o);
+        pick.push(o);                       // clickable in the inspector
+        const cid = o.userData?.componentId ?? id;
+        if (cid) {                          // pgroup is untransformed, so local == world
+          if (!instances.has(cid)) instances.set(cid, []);
+          instances.get(cid).push(o.position.clone());
+        }
+      };
+      const marginX = 1.6, marginZ = 1.8;
+      // lay N units of a SKU out on a grid inside the room, wrapping into as many
+      // lineups as the depth allows — count comes from load, not from floor area
+      // zOff is where this lineup starts inside the room; the bottom margin is
+      // fixed so a second lineup can't be squeezed out by the first one's offset
+      const grid = (id, n, xPitch, zPitch, zOff, ry) => {
+        const nx = Math.max(1, Math.floor((rm.w - marginX * 2) / xPitch));
+        const x0 = rm.x0 + (rm.w - Math.min(n, nx) * xPitch) / 2 + xPitch / 2;
+        const zMax = rm.z0 + rm.d - 1.4;
+        let rows = 0;
+        for (let i = 0; i < n; i++) {
+          const ix = i % nx, iz = Math.floor(i / nx);
+          const z = rm.z0 + zOff + zPitch * (iz + 0.5);
+          if (z > zMax) break;
+          place(id, {}, x0 + ix * xPitch, z, ry || 0);
+          rows = iz + 1;
+        }
+        return rows * zPitch;
+      };
+      if (rm.equip === 'elec') {
+        // battery lineups at the front, RPPs behind them
+        const u = rm.units || {};
+        const used = grid('ELC-005', u['ELC-005'] ?? 8, 0.95, 2.4, marginZ);
+        grid('PDW-003', u['PDW-003'] ?? 6, 1.1, 2.2, marginZ + used + 1.6);
+      } else if (rm.equip === 'mech') {
+        // CDU lineups first, pump skids on the row behind them (yard side)
+        const u = rm.units || {};
+        const used = grid('LCL-002', u['LCL-002'] ?? 12, 3.2, 3.4, marginZ);
+        grid('MEC-006', u['MEC-006'] ?? 4, 3.6, 3.2, marginZ + used + 1.2);
+      } else if (rm.equip === 'store') {
+        // palletised spares + staging crates
+        const crate = new THREE.MeshStandardMaterial({ color: 0x4a4034, roughness: 0.9 });
+        for (let i = 0; i < 14; i++) {
+          const w = 1.2 + (i % 3) * 0.3, h = 0.9 + (i % 4) * 0.35;
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 1.2), crate);
+          m.position.set(rm.x0 + 2 + (i % 3) * 2.1, h / 2, rm.z0 + 2 + Math.floor(i / 3) * 1.7);
+          pgroup.add(m);
+        }
+      }
+
+      const lb = makeLabel(rm.label, { sub: rm.sub, color: rm.color });
+      lb.position.set(cx, partH + 1.9, cz);
+      pgroup.add(lb);
+      layers.labels.push(lb);
+    }
+
+    // honest future-phase shell: everything behind the fitted program
+    const shellD = hallD - fit.shellZ0;
+    if (shellD > 6) {
+      const shellFloor = new THREE.Mesh(new THREE.PlaneGeometry(hallW - 2, shellD - 2),
+        new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.95,
+          transparent: true, opacity: 0.5 }));
+      shellFloor.rotation.x = -Math.PI / 2;
+      shellFloor.position.set(0, 0.015, fit.shellZ0 + shellD / 2);
+      pgroup.add(shellFloor);
+      // hatch lines so it reads as "not built yet" rather than "we forgot"
+      const hatch = new THREE.LineBasicMaterial({ color: 0x4a5464, transparent: true, opacity: 0.4 });
+      const pts = [];
+      for (let x = -hallW / 2 + 1; x < hallW / 2 - 1; x += 6) {
+        pts.push(new THREE.Vector3(x, 0.03, fit.shellZ0 + 1),
+                 new THREE.Vector3(x, 0.03, hallD - 1));
+      }
+      for (let z = fit.shellZ0 + 1; z < hallD - 1; z += 6) {
+        pts.push(new THREE.Vector3(-hallW / 2 + 1, 0.03, z),
+                 new THREE.Vector3(hallW / 2 - 1, 0.03, z));
+      }
+      const hl = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), hatch);
+      pgroup.add(hl);
+
+      const a = fit.program.areas;
+      const sl = makeLabel('SHELL — FUTURE PHASE', {
+        sub: `${a.shell.toLocaleString()} SF (${fit.program.shellPct}% of hall) · ~${fit.program.shellRacks} more racks if power existed`,
+        color: '#9aa4b2' });
+      sl.position.set(0, 6.5, fit.shellZ0 + shellD / 2);
+      pgroup.add(sl);
+      layers.labels.push(sl);
+    }
+    root.add(pgroup);
+    layers.program = pgroup;
+    result.programGroup = pgroup;
+  }
+
   const grossArea = hallW * (hallD + grayD);
   // theoretical rack capacity of the shell (aisle-inclusive pitch, 15% derate for columns/egress)
   const capRacks = Math.floor((hallW - 4) / rackW) * Math.floor((hallD - 4) / ((pairDepth + aisleOuter) / 2)) * floors * 0.85;
@@ -811,11 +954,12 @@ export function buildFacility(scene, cfg, flows) {
   // scene label and the telemetry panel can never disagree
   {
     const builtRows = rowZs.length;
-    const l2 = makeLabel('WHITE SPACE', {
-      sub: `${floors > 1 ? floors + ' floors · ' : ''}${builtRows} rows · ${nRacks.toLocaleString()} racks`,
-      color: '#7fd4ff',
-    });
+    const podSub = fit
+      ? `${Math.round(fit.pod.w / 0.3048)}x${Math.round(fit.pod.d / 0.3048)} ft pod · ${builtRows} rows · ${nRacks.toLocaleString()} racks · ${fit.program.areas.whiteSpace.toLocaleString()} SF`
+      : `${floors > 1 ? floors + ' floors · ' : ''}${builtRows} rows · ${nRacks.toLocaleString()} racks`;
+    const l2 = makeLabel('WHITE SPACE', { sub: podSub, color: '#7fd4ff' });
     l2.position.copy(wsLabel.position);
+    if (fit) l2.position.set(0, wallH + 2.2, fit.pod.z0 + fit.pod.d / 2);
     root.add(l2);
     layers.labels.push(l2);
     wsLabel.visible = false;
@@ -838,6 +982,7 @@ export function buildFacility(scene, cfg, flows) {
     chillerCount: nCh,
     fuelTanks: nFuel,
     basePUE: cfg.basePUE ?? (liquid ? 1.15 : 1.45),
+    program: fit ? fit.program : null,
   };
 
   scene.add(root);

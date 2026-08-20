@@ -1,8 +1,8 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js?b48';
-import { comp, kw } from './catalog.js?b48';
+import * as B from './builders.js?b49';
+import { comp, kw } from './catalog.js?b49';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
@@ -171,6 +171,63 @@ export function setPlacement(siteKey, instKey, x, z) {
 }
 export function clearPlacement(siteKey) { delete placement[siteKey]; }
 
+
+/* ---------------- interior space program (site builds) ----------------
+   What a real fit-out consumes, in SF per kW of critical IT. At rack-scale DLC
+   densities the white space is SMALL and the support rooms dominate — 26.9 MW of
+   GB200 needs a ~79x51 ft pod but ~12,000 SF of electrical and ~9,400 SF of
+   mechanical to serve it. Anything left over is shell, and we say so.
+   Ratios: electrical 0.45 SF/kW (UPS, switchgear, batteries, PDU/RPP),
+   mechanical 0.35 SF/kW (CDUs, pumps, heat exchangers), corridors 12%. */
+const M2_SF = 10.7639;
+export function spaceProgram(chip, itKW, racks, hallW_m, hallD_m, grayArea_SF, officeSF) {
+  const liquid = chip.cooling === 'liquid';
+  const rackW = 0.6, rackD = 1.068;
+  const hot = liquid ? 1.3 : 1.2192, cold = 1.2192;
+  const pairPitch = 2 * rackD + hot + cold;          // depth consumed per PAIR of rows
+
+  // pod proportioned toward square-ish, capped by the hall width
+  const podW = Math.min(24, hallW_m - 8);
+  const perRow = Math.max(8, Math.floor(podW / rackW));
+  const egressEvery = 17;
+  const inRowEvery = liquid ? 0 : 5;
+  const racksEff = perRow - Math.floor(perRow / egressEvery)
+    - (inRowEvery ? Math.floor(perRow / inRowEvery) : 0);
+  const rowsNeeded = Math.max(2, Math.ceil(racks / racksEff));
+  const pairs = Math.ceil(rowsNeeded / 2);
+  const podD = pairs * pairPitch + 2.0;
+
+  const elecTotal = 0.45 * itKW;                     // SF
+  const elecInterior = Math.max(0, elecTotal - grayArea_SF);
+  const mech = 0.35 * itKW;
+  const storage = 4000;
+  const podSF = podW * podD * M2_SF;
+  const sub = podSF + elecInterior + mech + storage + (officeSF || 0);
+  const corridors = 0.12 * sub;
+  const programSF = sub + corridors;
+  const hallSF = hallW_m * hallD_m * M2_SF;
+
+  return {
+    pod: { w: podW, d: podD, perRow, rows: rowsNeeded, pairs, racksEff, egressEvery, inRowEvery },
+    areas: {
+      whiteSpace: Math.round(podSF),
+      electricalGray: Math.round(grayArea_SF),
+      electricalInterior: Math.round(elecInterior),
+      mechanical: Math.round(mech),
+      noc: Math.round(officeSF || 0),
+      storage,
+      corridors: Math.round(corridors),
+      programTotal: Math.round(programSF),
+      shell: Math.round(Math.max(0, hallSF - programSF)),
+      hall: Math.round(hallSF),
+    },
+    sfPerRack: Math.round(programSF / Math.max(1, racks)),
+    shellPct: Math.round(Math.max(0, hallSF - programSF) / hallSF * 100),
+    // what the leftover shell could host at this program density, if power existed
+    shellRacks: Math.floor(Math.max(0, hallSF - programSF) / (programSF / Math.max(1, racks))),
+  };
+}
+
 /* Balance-of-plant optimizer: everything that ISN'T the chip, tuned to the chip.
    Levers (Design Studio efficiency model + engineering practice):
    - Heat rejection tech: DLC platforms -> adiabatic dry coolers (compressor-free
@@ -235,17 +292,23 @@ export function siteVersionConfig(chipKey) {
   // recover that gap as extra compute, air plants pay the tax.
   const { liquid, pue, maxRacks } = versionStats(chip);
   const bop = bopFor(chip);
-  // rows auto-fit to the bay width: 34 slots with a mid-row egress break every 17,
-  // in-row coolers every 5th slot on air builds
-  const racksPerRow = 34;
-  const egressEvery = 17;
-  const inRowEvery = liquid ? 0 : 5;
-  const racksEff = racksPerRow - Math.floor(racksPerRow / egressEvery)
-    - (inRowEvery ? Math.floor(racksPerRow / inRowEvery) : 0);
+  // INTERIOR FIT-OUT: size a real data-hall pod for the powered racks, then the
+  // support rooms that serve them. Rows pack densely inside the pod instead of
+  // sprawling across an empty shell.
+  const FTm = 0.3048;
+  const hallW_m = (s.buildingW_ft) * FTm;
+  const hallD_m = (s.buildingD_ft) * FTm - s.grayD;
+  const grayArea_SF = hallW_m * s.grayD * 10.7639;
+  const prog = spaceProgram(chip, maxRacks * chip.kwRack, maxRacks,
+                            hallW_m, hallD_m, grayArea_SF, s.officeSF);
+  const racksPerRow = prog.pod.perRow;
+  const egressEvery = prog.pod.egressEvery;
+  const inRowEvery = prog.pod.inRowEvery;
+  const racksEff = prog.pod.racksEff;
   // rows are built on EVERY floor, so size them per floor or the upper decks
   // get fully-equipped rows with zero racks under them.
   const floorsN = Math.max(1, s.stories ?? 1);
-  const rows = Math.max(2, Math.ceil(maxRacks / racksEff / floorsN));
+  const rows = Math.max(2, Math.ceil(prog.pod.rows / floorsN));
   const racksNominal = maxRacks;                          // placement stops at the power limit
   const itKW = maxRacks * chip.kwRack;
   const gpus = maxRacks * chip.gpusPerRack;
@@ -288,7 +351,57 @@ export function siteVersionConfig(chipKey) {
       count: rows, racksPerRow, rackId: chip.rackId, inRowEvery, egressEvery,
       maxRacks, kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
     },
-    balanceHalls: s.halls > 1,
+    balanceHalls: false,          // the pod places rows; hall balancing is off
+    fitout: (() => {
+      const M2 = 10.7639;
+      const pad = 1.5, gap = 3.0;          // gap bands ARE the service corridors
+      const podZ0 = 4;
+      const podD = prog.pod.d;
+      const rooms = [];
+      // BAND 1 — the pod, flanked by the rooms that must be adjacent to it:
+      // electrical on the left (short feeders to the RPPs), staging on the right
+      // against the dock doors on the east wall.
+      const sideW = (hallW_m - prog.pod.w) / 2 - pad - 1.5;
+      const bandRoom = (sf, side) => {
+        const need = sf / M2;
+        const w = Math.min(sideW, need / podD);
+        return { w: Math.max(4, w), d: Math.max(podD, need / Math.max(4, w)), side };
+      };
+      if (prog.areas.electricalInterior > 400) {
+        const r = bandRoom(prog.areas.electricalInterior, -1);
+        // one RPP per two rack rows; battery cabinets sized for 5 min at full IT
+        const rpps = Math.max(4, prog.pod.rows);
+        const batts = Math.max(4, Math.ceil(maxRacks * chip.kwRack * (5 / 60) / 100));
+        rooms.push({ key: 'elec', label: 'ELECTRICAL', sub: `${prog.areas.electricalInterior.toLocaleString()} SF · ${batts} battery cabinets · ${rpps} RPP`,
+                     x0: -hallW_m / 2 + pad, z0: podZ0, w: r.w, d: r.d, color: '#ffc233', equip: 'elec',
+                     units: { 'ELC-005': batts, 'PDW-003': rpps } });
+      }
+      {
+        const r = bandRoom(prog.areas.storage, 1);
+        rooms.push({ key: 'store', label: 'STAGING', sub: `${prog.areas.storage.toLocaleString()} SF · receiving · spares · burn-in`,
+                     x0: hallW_m / 2 - pad - r.w, z0: podZ0, w: r.w, d: r.d, color: '#9aa4b2', equip: 'store' });
+      }
+      // BAND 2 — mechanical gallery across the full hall width behind the pod,
+      // so every CDU has a straight pipe run to the pod and out to the yard.
+      const band1End = Math.max(podZ0 + podD, ...rooms.map(r => r.z0 + r.d));
+      {
+        const w = hallW_m - pad * 2;
+        const d = prog.areas.mechanical / M2 / w;
+        // unit counts from load, not from available floor: XDU-1350 class CDUs at
+        // N+1, one pump skid per 4 CDUs
+        const cdus = Math.ceil(maxRacks * chip.kwRack / 1350) + 1;
+        const pumps = Math.max(2, Math.ceil(cdus / 4));
+        rooms.push({ key: 'mech', label: 'MECHANICAL', sub: `${prog.areas.mechanical.toLocaleString()} SF · ${cdus} CDU (N+1) · ${pumps} pump skids`,
+                     x0: -hallW_m / 2 + pad, z0: band1End + gap, w, d, color: '#39c2ff', equip: 'mech',
+                     units: { 'LCL-002': cdus, 'MEC-006': pumps } });
+      }
+      return {
+        pod: { w: prog.pod.w, d: podD, z0: podZ0 },
+        rooms,
+        shellZ0: Math.max(...rooms.map(r => r.z0 + r.d)) + gap + 1,
+        program: prog,
+      };
+    })(),
     floors: floorsN,
     wallH: s.clearH_ft * FT * 0.55,
     shell: custom.shell,                                   // solid / glass / open — user-controlled
@@ -334,6 +447,7 @@ export function siteVersionConfig(chipKey) {
       battCabinets, crahNeed: liquid ? 0 : crahNeed,
       heatUnits, footprintAssumed: !!s.footprintAssumed,
       bop: { pue: bop.pue, wue: bop.wue, adiabatic: bop.adiabatic, dc800: bop.dc800, notes: bop.notes },
+      program: prog,
       measured: !!s.measured, parcelAc: s.parcel?.acres ?? null, geoFile: s.geoFile ?? null,
     },
     tourRackLine: `${chip.label} racks`,

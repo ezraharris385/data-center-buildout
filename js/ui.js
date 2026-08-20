@@ -1,5 +1,5 @@
 // ui.js — panels, inspector, telemetry, toggles.
-import { comp } from './catalog.js?b48';
+import { comp } from './catalog.js?b49';
 
 const $ = id => document.getElementById(id);
 
@@ -51,7 +51,7 @@ export function setUtilityUI(on, note, noteClass = '') {
   fn.className = `failover-note ${noteClass}`;
 }
 
-export function updateTelemetry({ itKW, totalKW, pue, racks, kwPerRack, source, gpus, wsPct }) {
+export function updateTelemetry({ itKW, totalKW, pue, racks, kwPerRack, source, gpus, wsPct, program }) {
   const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(1)} MW` : `${Math.round(v)} kW`;
   $('stITLoad').textContent = fmt(itKW);
   $('stTotal').textContent = fmt(totalKW);
@@ -64,7 +64,17 @@ export function updateTelemetry({ itKW, totalKW, pue, racks, kwPerRack, source, 
   s.textContent = source;
   s.className = 'stat-k' + (source === 'UTILITY' ? '' : source === 'BATTERY' ? ' bad' : ' warn');
   $('stGpus').textContent = gpus ? gpus.toLocaleString() : '—';
-  $('stWS').textContent = wsPct ? `${wsPct}%` : '—';
+  // on site builds this reads the real fit-out density, not hall-vs-gross area
+  if (program) {
+    $('stWS').textContent = `${program.sfPerRack} SF`;
+    $('stWS').nextElementSibling.textContent = `SF / rack (fit-out)`;
+    $('stWS').title = `${program.areas.programTotal.toLocaleString()} SF programmed · `
+      + `${program.areas.shell.toLocaleString()} SF shell (${program.shellPct}%)`;
+  } else {
+    $('stWS').textContent = wsPct ? `${wsPct}%` : '—';
+    $('stWS').nextElementSibling.textContent = 'White space';
+    $('stWS').title = '';
+  }
 }
 
 export function showInspector(componentId, extra = {}) {

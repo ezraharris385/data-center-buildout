@@ -7,24 +7,27 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp, kw } from './catalog.js?b48';
-import { animateBlink } from './materials.js?b48';
-import { FlowSystem } from './flows.js?b48';
-import { buildFacility } from './facility.js?b48';
-import { SCENES } from './scenes.js?b48';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b48';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b48';
-import { initDatabase, setDatabaseVisible } from './database.js?b48';
-import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b48';
-import { initAgent } from './agent.js?b48';
-import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b48';
-import * as UI from './ui.js?b48';
+import { loadCatalog, comp, kw } from './catalog.js?b49';
+import { animateBlink } from './materials.js?b49';
+import { FlowSystem } from './flows.js?b49';
+import { buildFacility } from './facility.js?b49';
+import { SCENES } from './scenes.js?b49';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b49';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b49';
+import { initDatabase, setDatabaseVisible } from './database.js?b49';
+import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b49';
+import { initAgent } from './agent.js?b49';
+import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b49';
+import * as UI from './ui.js?b49';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
 // viewport size, latched to the last non-zero readout (headless panes report 0×0 intermittently)
 let vw = innerWidth || 1280, vh = innerHeight || 720;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+// ?cap=1 keeps the drawing buffer so a dev tool can read frames off the canvas
+const CAPTURE = new URLSearchParams(location.search).has('cap');
+const NO_BLOOM = new URLSearchParams(location.search).has('nobloom');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: CAPTURE });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.setSize(vw, vh);
 renderer.shadowMap.enabled = true;
@@ -434,6 +437,7 @@ function updateTelemetry() {
     source: state.source,
     gpus: s.gpus,
     wsPct: s.whiteSpacePct,
+    program: s.program,
   });
 }
 
@@ -647,7 +651,8 @@ function step() {
     if (camera.position.y < 0.35) camera.position.y = 0.35;   // never dig under the slab
     if (controls.target.y < 0) controls.target.y = 0;
   }
-  composer.render();
+  if (NO_BLOOM) renderer.render(scene, camera);   // ?nobloom=1 — software GL can't do the float passes
+  else composer.render();
   if (recorder) recorder.compose(dt);
 }
 function animate() {
@@ -655,6 +660,8 @@ function animate() {
   requestAnimationFrame(animate);
   step();
 }
+window.__render = (n = 1) => { for (let i = 0; i < n; i++) step(); return 'rendered ' + n; };
+window.__dbg = { renderer, scene, camera, composer, THREE };   // capture/verification hooks
 setTimeout(() => {
   if (!rafAlive) {
     console.warn('rAF suspended — falling back to timer loop');

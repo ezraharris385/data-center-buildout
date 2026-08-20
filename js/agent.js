@@ -4,8 +4,8 @@
 //      (capacity, redundancy, runtime, PUE) — always available, no network.
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
-import { comp, kw, design } from './catalog.js?b48';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b48';
+import { comp, kw, design } from './catalog.js?b49';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b49';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
@@ -34,6 +34,35 @@ export function analyze(cfg, stats) {
       bad(`SPACE-LIMITED: the shell fits ${stats.racks.toLocaleString()} of ${cfg.rows.maxRacks.toLocaleString()} power-supported racks — ` +
           `${fmt(lostKW)} of feed capacity is stranded. This building binds on floor area, not the interconnect.`);
     }
+    // ----- interior space program: is the fit-out honest and dense? -----
+    const prog = stats.program;
+    if (prog) {
+      const a = prog.areas;
+      ok(`Fit-out program ${a.programTotal.toLocaleString()} SF at ${prog.sfPerRack} SF/rack all-in: `
+       + `white space ${a.whiteSpace.toLocaleString()} · electrical ${(a.electricalGray + a.electricalInterior).toLocaleString()} `
+       + `· mechanical ${a.mechanical.toLocaleString()} · NOC ${a.noc.toLocaleString()} · staging ${a.storage.toLocaleString()} `
+       + `· circulation ${a.corridors.toLocaleString()}.`);
+      // at rack-scale DLC the support rooms dominate — say so, it surprises people
+      const support = a.electricalGray + a.electricalInterior + a.mechanical;
+      if (support > a.whiteSpace * 2) {
+        ok(`Support-to-white-space ratio ${(support / a.whiteSpace).toFixed(1)}:1 — at ${stats.kwPerRack} kW/rack the `
+         + `electrical and mechanical rooms are ${(support / a.whiteSpace).toFixed(1)}× the data hall they serve. `
+         + `That is correct for this density and is the number most retrofit pro-formas get wrong.`);
+      }
+      if (prog.shellPct > 55) {
+        warn(`${prog.shellPct}% of the hall (${a.shell.toLocaleString()} SF) stays as unfitted shell — this building is `
+         + `POWER-limited, not space-limited. At this program density the remaining shell would absorb roughly `
+         + `${prog.shellRacks.toLocaleString()} more racks (~${fmt(prog.shellRacks * stats.kwPerRack)}) if a larger `
+         + `service existed. Phase the fit-out, or underwrite the extra shell as expansion optionality, not as day-one cost.`);
+      } else if (prog.shellPct < 8) {
+        warn(`Only ${prog.shellPct}% shell margin left — no room for a maintenance lay-down area or a future phase.`);
+      }
+      if (prog.sfPerRack > 400) {
+        warn(`${prog.sfPerRack} SF/rack all-in is high — the fixed rooms (electrical, mechanical, NOC) are being `
+         + `amortised over only ${stats.racks} racks. Denser platforms spread the same support program much further.`);
+      }
+    }
+
     const wsf = Math.round(itKW * 1000 / site.grossSF);
     if (wsf > 2000) bad(`Power density ${wsf} W/sf gross — roughly 1.5–3× anything built today. This program does not fit this shell; either shed load or find a bigger building.`);
     else if (wsf > 1500) warn(`Power density ${wsf} W/sf gross — beyond today's typical retrofit ceiling (~600–1,500 W/sf). Physically placeable with rack-scale DLC, but structure, risers, and yard become the fight.`);
