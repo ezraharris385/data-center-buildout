@@ -1,8 +1,8 @@
 // custom.js — the Custom Projects tab: a parametric facility builder.
 // Every control maps onto the same config shape the four archetypes use,
 // so the composer, flows, education and analyst all work on custom builds.
-import * as B from './builders.js?b47';
-import { comp, kw } from './catalog.js?b47';
+import * as B from './builders.js?b48';
+import { comp, kw } from './catalog.js?b48';
 
 /* ---------------- compute platforms (chip dropdown) ----------------
    Per-chip rack architecture: GPUs per rack, rack power, cooling, and the
@@ -242,7 +242,10 @@ export function siteVersionConfig(chipKey) {
   const inRowEvery = liquid ? 0 : 5;
   const racksEff = racksPerRow - Math.floor(racksPerRow / egressEvery)
     - (inRowEvery ? Math.floor(racksPerRow / inRowEvery) : 0);
-  const rows = Math.max(2, Math.ceil(maxRacks / racksEff));
+  // rows are built on EVERY floor, so size them per floor or the upper decks
+  // get fully-equipped rows with zero racks under them.
+  const floorsN = Math.max(1, s.stories ?? 1);
+  const rows = Math.max(2, Math.ceil(maxRacks / racksEff / floorsN));
   const racksNominal = maxRacks;                          // placement stops at the power limit
   const itKW = maxRacks * chip.kwRack;
   const gpus = maxRacks * chip.gpusPerRack;
@@ -286,7 +289,7 @@ export function siteVersionConfig(chipKey) {
       maxRacks, kwPerRack: chip.kwRack, gpusPerRack: chip.gpusPerRack, builder: chip.builder,
     },
     balanceHalls: s.halls > 1,
-    floors: s.stories ?? 1,
+    floors: floorsN,
     wallH: s.clearH_ft * FT * 0.55,
     shell: custom.shell,                                   // solid / glass / open — user-controlled
     building: { w: wFt * FT, d: dFt * FT },
@@ -324,6 +327,7 @@ export function siteVersionConfig(chipKey) {
     },
     siteOverrides: {
       siteName: s.name, grossSF: s.grossSF, officeSF: s.officeSF, halls: s.halls,
+      criticalITMW: s.criticalITMW,
       upsKW: s.upsMW * 1000, genKW: Math.min(genCount, small ? 5 : 14) * 3000,
       utilityKW: s.utilityMW * 1000, designPUE: s.designPUE,
       tfKW: s.utilityMW * 1000,

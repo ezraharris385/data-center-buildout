@@ -1,8 +1,8 @@
 {
  "name": "Lehigh Ave, Niles (OSM footprint)",
  "centroid": {
-  "lat": 42.02222307142857,
-  "lng": -87.77984232857143
+  "lat": 42.021905389658016,
+  "lng": -87.77985201660373
  },
  "building": [
   [
@@ -46,5 +46,6 @@
   ]
  ],
  "source": "User pin 42\u00b001'19.1\"N 87\u00b046'47.8\"W + OSM way 914110323 (building=industrial, N Lehigh Ave, Niles IL). 138,892 SF traced vs 135,650 SF workbook.",
- "address": "6071 W Mulford St \u00b7 N Lehigh Ave, Niles IL 60714"
+ "address": "6071 W Mulford St \u00b7 N Lehigh Ave, Niles IL 60714",
+ "centroidNote": "AREA centroid of the building ring (shoelace) \u2014 the site-map transform anchors scene (x=0, z=centerZ) here. Must NOT be the vertex mean: for irregular rings the two differ (Niles by 116 ft)."
 }

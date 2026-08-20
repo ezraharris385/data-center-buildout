@@ -7,18 +7,18 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js?b47';
-import { animateBlink } from './materials.js?b47';
-import { FlowSystem } from './flows.js?b47';
-import { buildFacility } from './facility.js?b47';
-import { SCENES } from './scenes.js?b47';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b47';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b47';
-import { initDatabase, setDatabaseVisible } from './database.js?b47';
-import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b47';
-import { initAgent } from './agent.js?b47';
-import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b47';
-import * as UI from './ui.js?b47';
+import { loadCatalog, comp, kw } from './catalog.js?b48';
+import { animateBlink } from './materials.js?b48';
+import { FlowSystem } from './flows.js?b48';
+import { buildFacility } from './facility.js?b48';
+import { SCENES } from './scenes.js?b48';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b48';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b48';
+import { initDatabase, setDatabaseVisible } from './database.js?b48';
+import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b48';
+import { initAgent } from './agent.js?b48';
+import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b48';
+import * as UI from './ui.js?b48';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
@@ -118,9 +118,21 @@ function disposeScene() {
 const plantOv = { heat: 'auto', power: 'auto', air: 'auto', red: 'n1' };
 
 function applyPlantOverrides(cfgIn) {
-  const cfg = { ...cfgIn, yard: { ...cfgIn.yard }, gray: cfgIn.gray.map(g => ({ ...g })) };
+  // DEEP copy every object we mutate — a shallow spread leaves cfg.yard.chillers
+  // pointing at the shared SCENES object and permanently corrupts the preset.
+  const cfg = {
+    ...cfgIn,
+    yard: {
+      ...cfgIn.yard,
+      chillers: { ...cfgIn.yard.chillers },
+      gensets: { ...cfgIn.yard.gensets },
+    },
+    gray: cfgIn.gray.map(g => ({ ...g })),
+    siteOverrides: cfgIn.siteOverrides ? { ...cfgIn.siteOverrides } : cfgIn.siteOverrides,
+  };
   const liquid = cfg.cooling === 'liquid';
-  const kwRack = cfg.rows.kwPerRack || 8;
+  // rack power: chip/site builds set kwPerRack; archetypes rely on the catalog
+  const kwRack = cfg.rows.kwPerRack || kw(cfg.rows.rackId) || 8;
   const itMW = (cfg.rows.maxRacks ?? cfg.rows.count * cfg.rows.racksPerRow) * kwRack / 1000;
   const notes = [];
   let dPUE = 0;
@@ -154,8 +166,10 @@ function applyPlantOverrides(cfgIn) {
 
   // redundancy
   if (plantOv.red === 'n') {
-    cfg.yard.gensets = { ...cfg.yard.gensets, count: Math.max(1, cfg.yard.gensets.count - 1) };
-    cfg.yard.chillers = { ...cfg.yard.chillers, count: Math.max(1, cfg.yard.chillers.count - 1) };
+    // dropping the +1 spare must never invent equipment the user set to zero
+    const gN = cfg.yard.gensets.count, cN = cfg.yard.chillers.count;
+    cfg.yard.gensets = { ...cfg.yard.gensets, count: gN > 0 ? Math.max(1, gN - 1) : 0 };
+    cfg.yard.chillers = { ...cfg.yard.chillers, count: cN > 0 ? Math.max(1, cN - 1) : 0 };
     notes.push('N-only redundancy — one failure = load shed (analyst will flag)');
   } else if (plantOv.red === '2n') {
     cfg.yard.gensets = { ...cfg.yard.gensets, count: Math.min(16, Math.ceil(cfg.yard.gensets.count * 1.8) ) };
@@ -165,6 +179,24 @@ function applyPlantOverrides(cfgIn) {
   }
 
   cfg.basePUE = Math.max(1.06, Math.round((cfg.basePUE + dPUE) * 100) / 100);
+
+  // Re-derive everything downstream reads, so the analyst and the failover sim
+  // grade the plant that was actually drawn (not the pre-override slider state).
+  const genUnitKW = kw(cfg.yard.gensets.id) || 3000;
+  const battCabs = cfg.gray.filter(g => g.id === 'ELC-005').reduce((n, g) => n + g.count, 0);
+  cfg._built = {
+    genCount: cfg.yard.gensets.count,
+    genKW: cfg.yard.gensets.count * genUnitKW,
+    chillerCount: cfg.yard.chillers.count,
+    battCabinets: battCabs,
+    bessBlocks: cfg.yard.bess ?? 0,
+    bessKWh: (cfg.yard.bess ?? 0) * 2000,
+  };
+  if (cfg.siteOverrides) {
+    cfg.siteOverrides.genKW = cfg._built.genKW;
+    cfg.siteOverrides.battCabinets = battCabs;
+    cfg.siteOverrides.bessBlocks = cfg._built.bessBlocks;
+  }
   cfg._plantOv = { active: notes.length > 0, notes, dPUE };
   return cfg;
 }
@@ -200,6 +232,10 @@ function build3D(cfg) {
   sun.shadow.camera.updateProjectionMatrix();
   sun.target.position.set(0, 0, (bb.min.z + bb.max.z) / 2);
   scene.add(sun.target);
+
+  // debug hook (same family as __cam/__pick): lets an audit inspect the built
+  // facility — per-floor rack distribution, instance map, stats.
+  window.__fac = facility;
 
   flyTo('overview', 0);
   updateTelemetry();
@@ -406,12 +442,21 @@ function failUtility() {
   state.source = 'BATTERY';
   for (const f of flows.power) f.setEnabled(false);
   flows._utilityOn = false;
-  // ride-through is a function of THIS build: cabinets × 250 kWh vs live IT draw
-  const battCabs = state.cfg?.siteOverrides?.battCabinets
-    ?? state.cfg?.gray?.find(g => g.id === 'ELC-005')?.count ?? 0;
+  // ride-through from the plant ACTUALLY BUILT: battery cabinets (250 kWh each)
+  // plus any BESS blocks (2 MWh each), against the live IT draw.
+  const b = state.cfg?._built;
+  const battCabs = b ? b.battCabinets
+    : (state.cfg?.gray?.find(g => g.id === 'ELC-005')?.count ?? 0);
+  const bessKWh = b ? b.bessKWh : (state.cfg?.yard?.bess ?? 0) * 2000;
   const itNow = Math.max(1, (facility?.stats.itKW ?? 1000) * state.load);
-  const rideMin = battCabs * 250 * 60 / itNow;
-  UI.setUtilityUI(false, `⚡ Grid lost. UPS on batteries — ~${rideMin.toFixed(1)} min ride-through at current ${(itNow / 1000).toFixed(1)} MW load…`, 'alert');
+  const storedKWh = battCabs * 250 + bessKWh;
+  const rideMin = storedKWh * 60 / itNow;
+  const srcTxt = bessKWh > 0
+    ? `${battCabs} cabinet${battCabs === 1 ? '' : 's'} + ${bessKWh / 2000}× 2 MWh BESS`
+    : `${battCabs} cabinet${battCabs === 1 ? '' : 's'}`;
+  UI.setUtilityUI(false, storedKWh > 0
+    ? `⚡ Grid lost. ${srcTxt} carrying ~${rideMin.toFixed(1)} min at current ${(itNow / 1000).toFixed(1)} MW load…`
+    : `⚡ Grid lost. NO stored energy configured — the IT load dropped instantly.`, 'alert');
   updateTelemetry();
   state.failTimers.push(setTimeout(() => {
     UI.setUtilityUI(false, '🔧 Engine start signal → gensets cranking…', 'gen');

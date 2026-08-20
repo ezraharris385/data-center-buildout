@@ -3,7 +3,7 @@
 // title block, north arrow, scale bar, zoned building, keyed equipment
 // schedule with counts/capacities, off-parcel violations in red, and
 // drag-to-place for yard plant. Bird's-eye only.
-import { comp, kw } from './catalog.js?b47';
+import { comp, kw } from './catalog.js?b48';
 
 let map = null;
 let equipLayer = null, zoneLayer = null, clearLayer = null;

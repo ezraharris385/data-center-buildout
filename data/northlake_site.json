@@ -1,8 +1,8 @@
 {
  "name": "North Ave, Northlake (measured KMZ)",
  "centroid": {
-  "lat": 41.90668098233049,
-  "lng": -87.90042756703855
+  "lat": 41.90675207718179,
+  "lng": -87.9004377514225
  },
  "building": [
   [
@@ -79,5 +79,6 @@
    0
   ]
  ],
- "address": "E North Ave, Northlake IL 60164"
+ "address": "E North Ave, Northlake IL 60164",
+ "centroidNote": "AREA centroid of the building ring (shoelace) \u2014 the site-map transform anchors scene (x=0, z=centerZ) here. Must NOT be the vertex mean: for irregular rings the two differ (Niles by 116 ft)."
 }

@@ -7,9 +7,9 @@
 //   Equipment yard:                 z ∈ [-grayD - yardD, -grayD]
 // Multi-floor: white space repeats on each level at y = floor * floorH.
 import * as THREE from 'three';
-import { STD, dims, comp, kw } from './catalog.js?b47';
-import { mats, blinkMats } from './materials.js?b47';
-import * as B from './builders.js?b47';
+import { STD, dims, comp, kw } from './catalog.js?b48';
+import { mats, blinkMats } from './materials.js?b48';
+import * as B from './builders.js?b48';
 
 /* ---------- canvas label sprite ---------- */
 function makeLabel(text, { size = 44, color = '#9fc9e8', sub = null } = {}) {
@@ -362,7 +362,7 @@ export function buildFacility(scene, cfg, flows) {
     layers.labels.push(l);
     return l;
   }
-  zoneLabel('WHITE SPACE', `${floors > 1 ? floors + ' floors · ' : ''}${rowCount * floors} rows · ${rowCount * racksPerRow * floors} racks`, 0, wallH + 2.2, hallD / 2, '#7fd4ff');
+  const wsLabel = zoneLabel('WHITE SPACE', 'building…', 0, wallH + 2.2, hallD / 2, '#7fd4ff');
   zoneLabel('GRAY SPACE', 'power & controls', 0, wallH + 2.2, -grayD / 2, '#ffc233');
   zoneLabel('YARD', 'generation · heat rejection · fuel', 0, 6.5, -grayD - yardD / 2, '#9fb2c8');
 
@@ -491,7 +491,7 @@ export function buildFacility(scene, cfg, flows) {
 
     // pod labels (ground floor only, plus level tags above)
     if (f === 0) {
-      for (let p = 0; p < pairs; p++) {
+      for (let p = 0; p < Math.min(pairs, Math.ceil(rowZs.length / 2)); p++) {
         const zc = zStart + p * (pairDepth + aisleOuter) + (pairDepth - rackD) / 2;
         const l = makeLabel(cfg.podName ? `${cfg.podName} ${p + 1}` : `POD ${p + 1}`, { size: 30, color: '#5c7a94' });
         l.position.set(-rowLen / 2 - 2.6, rackH + 1.1, zc);
@@ -761,7 +761,10 @@ export function buildFacility(scene, cfg, flows) {
   }
 
   /* ---------------- anchors (for tours + education) ---------------- */
-  const aisle0 = rowZs.length > 1 ? (rowZs[0].z + rowZs[1].z) / 2 : rowZs[0].z + rowZs[0].facing * (rackD / 2 + 1.2);
+  // guard: a shell too shallow for one rack pair leaves rowZs empty
+  const aisle0 = rowZs.length > 1 ? (rowZs[0].z + rowZs[1].z) / 2
+    : rowZs.length === 1 ? rowZs[0].z + rowZs[0].facing * (rackD / 2 + 1.2)
+    : hallD / 2;
   result.anchors = {
     utility: utilPos.clone(),
     transformers: tfPositions,
@@ -804,6 +807,23 @@ export function buildFacility(scene, cfg, flows) {
   const grossArea = hallW * (hallD + grayD);
   // theoretical rack capacity of the shell (aisle-inclusive pitch, 15% derate for columns/egress)
   const capRacks = Math.floor((hallW - 4) / rackW) * Math.floor((hallD - 4) / ((pairDepth + aisleOuter) / 2)) * floors * 0.85;
+  // now that placement is final, restate the sprite with REAL counts so the
+  // scene label and the telemetry panel can never disagree
+  {
+    const builtRows = rowZs.length;
+    const l2 = makeLabel('WHITE SPACE', {
+      sub: `${floors > 1 ? floors + ' floors · ' : ''}${builtRows} rows · ${nRacks.toLocaleString()} racks`,
+      color: '#7fd4ff',
+    });
+    l2.position.copy(wsLabel.position);
+    root.add(l2);
+    layers.labels.push(l2);
+    wsLabel.visible = false;
+    const i = layers.labels.indexOf(wsLabel);
+    if (i >= 0) layers.labels.splice(i, 1);
+    root.remove(wsLabel);
+  }
+
   result.stats = {
     racks: nRacks,
     itKW: nRacks * rackKw,

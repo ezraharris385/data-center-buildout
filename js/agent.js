@@ -4,8 +4,8 @@
 //      (capacity, redundancy, runtime, PUE) — always available, no network.
 //   2. An optional Claude-powered narrative analyst (bring your own API key,
 //      stored in localStorage only, called directly from the browser).
-import { comp, kw, design } from './catalog.js?b47';
-import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b47';
+import { comp, kw, design } from './catalog.js?b48';
+import { custom, RACK_OPTIONS, UPS_OPTIONS, GEN_OPTIONS, HEATREJ_OPTIONS, CHIP_OPTIONS, SITE_77N } from './custom.js?b48';
 
 const fmt = v => v >= 1000 ? `${(v / 1000).toFixed(2)} MW` : `${Math.round(v)} kW`;
 
@@ -35,7 +35,8 @@ export function analyze(cfg, stats) {
           `${fmt(lostKW)} of feed capacity is stranded. This building binds on floor area, not the interconnect.`);
     }
     const wsf = Math.round(itKW * 1000 / site.grossSF);
-    if (wsf > 1500) warn(`Power density ${wsf} W/sf gross — beyond today's typical retrofit ceiling (~600–1,500 W/sf). Physically placeable with rack-scale DLC, but structure, risers, and yard become the fight.`);
+    if (wsf > 2000) bad(`Power density ${wsf} W/sf gross — roughly 1.5–3× anything built today. This program does not fit this shell; either shed load or find a bigger building.`);
+    else if (wsf > 1500) warn(`Power density ${wsf} W/sf gross — beyond today's typical retrofit ceiling (~600–1,500 W/sf). Physically placeable with rack-scale DLC, but structure, risers, and yard become the fight.`);
     else ok(`Power density ${wsf} W/sf gross — within retrofit norms.`);
     if (site.parcelAc && site.parcelAc < 1.5) {
       warn(`Parcel is ${site.parcelAc} ac — the N+1 yard plant drawn here overruns the property line (see the amber boundary). ` +
@@ -53,7 +54,7 @@ export function analyze(cfg, stats) {
     else ok(`This build: ${fmt(itKW)} IT × PUE ${pue} = ${fmt(itKW * pue)} — inside the ${fmt(util)} feed.`);
 
     // optimization report — how the confines were used
-    const baseIT = 24000;   // workbook critical-IT baseline
+    const baseIT = (site.criticalITMW ?? 24) * 1000;   // this site's own program baseline
     if (itKW > baseIT * 1.005) ok(`Optimized sizing: at PUE ${pue} the same feed carries ${fmt(itKW)} IT vs the workbook's ${fmt(baseIT)} (sized at PUE ${site.designPUE}) — the efficiency gap converts to ~${(stats.gpus - Math.floor(baseIT / stats.kwPerRack) * (cfg.chip?.gpusPerRack ?? 0)).toLocaleString()} extra GPUs.`);
     else if (itKW < baseIT * 0.995) warn(`Air-platform tax: PUE ${pue} caps deployable IT at ${fmt(itKW)} vs the ${fmt(baseIT)} baseline — the interconnect, not the floor, binds this version.`);
     if (cfg.rows.maxRacks) ok(`Layout optimization: ${stats.racks.toLocaleString()} of ${cfg.rows.maxRacks.toLocaleString()} power-limited racks placed (${Math.round(stats.racks / cfg.rows.maxRacks * 100)}%) — rows auto-fit to the bay width, nudged off column lines (zero racks lost to columns), egress break every ${cfg.rows.egressEvery} slots${site.halls > 1 ? `, balanced across ${site.halls} halls` : ''}.`);
@@ -61,15 +62,28 @@ export function analyze(cfg, stats) {
     // power chain from the workbook budget
     if (site.upsKW < itKW) bad(`UPS budget ${fmt(site.upsKW)} < IT load ${fmt(itKW)}.`);
     else ok(`UPS ${fmt(site.upsKW)} vs ${fmt(itKW)} IT — per workbook budget.`);
-    if (site.genKW < itKW * pue) warn(`Generators ${fmt(site.genKW)} vs ${fmt(itKW * pue)} total — check N+1 at this PUE.`);
+    // severity matches the freeform thresholds: shortfall = bad, N-only = warn
+    if (site.genKW < itKW * pue) bad(`Generation SHORTFALL: ${fmt(site.genKW)} drawn vs ${fmt(itKW * pue)} facility load — on grid loss you shed ${fmt(itKW * pue - site.genKW)}.`);
+    else if (site.genKW < itKW * pue * 1.25) warn(`Generation is N-only (${fmt(site.genKW)} vs ${fmt(itKW * pue)}) — one failed start = load shed.`);
     else ok(`Generators ${fmt(site.genKW)} (${Math.round(site.genKW / 3000)}× 3 MW, N+1 sized to this platform) cover ${fmt(itKW * pue)} total.`);
 
     // cooling plant — sized from this chip's heat load
     const needCool = itKW * 1.05;
-    if (stats.coolKW >= needCool) ok(`Heat rejection ${fmt(stats.coolKW)} (${stats.chillerCount}× 1 MW, N+1 from this platform's load) vs ${fmt(needCool)} heat.`);
-    else warn(`Heat rejection drawn ${fmt(stats.coolKW)} vs ${fmt(needCool)} needed — full design is ${site.heatUnits}× 1 MW; yard renders the first ${stats.chillerCount}.`);
+    if (stats.coolKW >= needCool * 1.2) ok(`Heat rejection ${fmt(stats.coolKW)} (${stats.chillerCount}× 1 MW, N+1 from this platform's load) vs ${fmt(needCool)} heat.`);
+    else if (stats.coolKW >= needCool) warn(`Heat rejection is N-only: ${fmt(stats.coolKW)} vs ${fmt(needCool)} heat — one unit down on a design day is a thermal excursion.`);
+    else bad(`COOLING SHORTFALL: ${fmt(stats.coolKW)} drawn vs ${fmt(needCool)} of heat — this plant cannot reject the load it generates. Full design needs ${site.heatUnits}× 1 MW; the yard fits ${stats.chillerCount}.`);
     if (site.crahNeed > 0) warn(`Air-cooled platform: needs ~${site.crahNeed} CW146-class air handlers for ${fmt(itKW)} IT — at this density rear-door HX or fan walls are the realistic fit-out; perimeter wall space caps the drawing at ${cfg.crahCount}.`);
-    if (site.battCabinets) ok(`Batteries: ${site.battCabinets} cabinets ≈ 5 min ride-through at full ${fmt(itKW)} IT (scales live in the failover sim).`);
+    // stored energy: one number, computed the same way the failover sim does
+    {
+      const cabs = cfg._built?.battCabinets ?? site.battCabinets ?? 0;
+      const bKWh = cfg._built?.bessKWh ?? (cfg.yard.bess ?? 0) * 2000;
+      const storedKWh = cabs * 250 + bKWh;
+      const mins = storedKWh * 60 / Math.max(1, itKW);
+      const src = bKWh > 0 ? `${cabs} cabinet${cabs === 1 ? '' : 's'} + ${bKWh / 2000}× 2 MWh BESS` : `${cabs} cabinets`;
+      if (storedKWh === 0) bad('No stored energy configured — nothing bridges the gap to generator start.');
+      else if (mins < 5) warn(`Ride-through ${mins.toFixed(1)} min at full ${fmt(itKW)} IT (${src}) — below the ~5 min industry floor for a diesel start.`);
+      else ok(`Ride-through ${mins.toFixed(1)} min at full ${fmt(itKW)} IT (${src}) — matches the failover sim.`);
+    }
 
     // user plant overrides (vs the optimized default)
     if (cfg._plantOv?.active) {
@@ -84,7 +98,7 @@ export function analyze(cfg, stats) {
         if (bessRemoved && n.includes('BESS')) continue;    // overridden away
         ok(`• ${n}`);
       }
-      if (site.bop.dc800 && (cfg.yard.bess ?? 0) > 0) ok(`BESS ride-through replaces central UPS strings: ${cfg.yard.bess} × 2 MWh LFP blocks cover ~5 min at full IT load (NFPA 855 siting on the pad).`);
+      if (site.bop.dc800 && (cfg.yard.bess ?? 0) > 0) ok(`BESS ride-through replaces central UPS strings: ${cfg.yard.bess} × 2 MWh LFP blocks on the pad (NFPA 855 siting) — see the ride-through figure above.`);
     }
 
     // platform-specific physical & usage engineering
@@ -163,7 +177,7 @@ export function analyze(cfg, stats) {
       warn(`${c.label}: ${racksAtSite.toLocaleString()} racks (${(racksAtSite * c.gpusPerRack).toLocaleString()} GPUs) at today's ${fmt(itKW)} IT. ` +
            `At 50 MW IT: ${racks50.toLocaleString()} racks (${(racks50 * c.gpusPerRack).toLocaleString()} GPUs) — ` +
            `space ${spaceOK ? 'fits' : `EXCEEDS shell (~${stats.spaceCapRacks.toLocaleString()} rack cap)`}; ` +
-           `needs ~${fmt(util50)} utility (${(util50 / 1000 - site.utilityKW / 1000).toFixed(1)} MW above today's feed).`);
+           `needs ~${fmt(util50)} utility (${util50 > site.utilityKW ? `+${((util50 - site.utilityKW) / 1000).toFixed(1)} MW over` : `${((site.utilityKW - util50) / 1000).toFixed(1)} MW inside`} today's feed).`);
     }
     const score2 = f.some(x => x.level === 'bad') ? 'BLOCKED' : 'SOUND';
     return { findings: f, score: score2, itKW, totalKW, pue };
@@ -186,53 +200,67 @@ export function analyze(cfg, stats) {
   else if (rejKW < heatToReject * 1.2) warn(`Cooling is N-only: ${fmt(rejKW)} vs ${fmt(heatToReject)} load. One unit down on a design day = thermal excursion. Target N+1 (~${fmt(heatToReject + (kw(cfg.yard.chillers.id) || 1000))}).`);
   else ok(`Heat rejection ${fmt(rejKW)} vs ~${fmt(heatToReject)} load — ${(rejKW / heatToReject).toFixed(2)}× margin (≈N+${Math.floor((rejKW - heatToReject) / (kw(cfg.yard.chillers.id) || 1000))}).`);
 
-  // UPS capacity
-  const upsOpt = UPS_OPTIONS.find(u => u.id === custom.ups);
-  const upsKW = (upsOpt?.kw ?? 0) * custom.upsCount * 0.9; // kVA→kW-ish derate
+  /* Everything below grades the plant AS BUILT (cfg._built / cfg.yard / cfg.gray),
+     never the raw slider state — plant overrides change the drawn facility, and
+     the report must follow it. */
+  const built = cfg._built ?? {};
+  const grayCount = id => cfg.gray.filter(g => g.id === id).reduce((n, g) => n + g.count, 0);
+
+  // UPS capacity — from the lineups actually placed in gray space
+  const upsKW = UPS_OPTIONS.reduce((sum, u) => sum + u.kw * grayCount(u.id), 0) * 0.9; // kVA→kW derate
   if (upsKW <= 0) bad('No UPS configured — any grid disturbance drops the entire IT load.');
   else if (upsKW < itKW) bad(`UPS undersized: ${fmt(upsKW)} usable vs ${fmt(itKW)} IT load (${Math.round(upsKW / itKW * 100)}%). Add blocks or shed load.`);
   else if (upsKW < itKW * 1.15) warn(`UPS at ${Math.round(itKW / upsKW * 100)}% of capacity — no N+1. A single module failure during an outage is a full drop.`);
   else ok(`UPS ${fmt(upsKW)} usable vs ${fmt(itKW)} IT — ${(upsKW / itKW).toFixed(2)}× coverage.`);
 
-  if (custom.batteries === 0 && upsKW > 0) bad('UPS has no battery cabinets — it cannot ride through the generator start gap.');
-  else if (custom.batteries > 0) {
-    const minutes = (custom.batteries * 250) / Math.max(1, itKW) * 60; // ~250kWh/cabinet rough
-    if (minutes < 4) warn(`Battery ride-through ≈ ${minutes.toFixed(1)} min at full load — tight against a slow genset start. Industry floor is ~5 min.`);
-    else ok(`Battery ride-through ≈ ${Math.min(60, minutes).toFixed(0)} min at full IT load.`);
+  // stored energy: battery cabinets (250 kWh) + BESS blocks (2 MWh) as drawn
+  const battCabs = built.battCabinets ?? grayCount('ELC-005');
+  const bessKWh = built.bessKWh ?? (cfg.yard.bess ?? 0) * 2000;
+  const storedKWh = battCabs * 250 + bessKWh;
+  if (storedKWh === 0 && upsKW > 0) bad('No stored energy (no battery cabinets, no BESS) — the UPS cannot ride through the generator start gap.');
+  else if (storedKWh > 0) {
+    const minutes = storedKWh / Math.max(1, itKW) * 60;
+    const src = bessKWh > 0 ? `${battCabs} cabinet${battCabs === 1 ? '' : 's'} + ${bessKWh / 2000}× 2 MWh BESS` : `${battCabs} cabinets`;
+    if (minutes < 4) warn(`Ride-through ≈ ${minutes.toFixed(1)} min at full load (${src}) — tight against a slow genset start; industry floor is ~5 min.`);
+    else ok(`Ride-through ≈ ${Math.min(120, minutes).toFixed(0)} min at full IT load (${src}).`);
   }
 
-  // generation
-  const genOpt = GEN_OPTIONS.find(g => g.id === custom.gen);
-  const genKW = (genOpt?.kw ?? 0) * custom.genCount;
-  if (genKW === 0) warn('No standby generation — the site rides only on batteries. Fine for a lab, fatal for production SLAs.');
-  else if (genKW < totalKW) bad(`Generators cover ${fmt(genKW)} but total facility load is ${fmt(totalKW)} — on grid loss you must shed ${fmt(totalKW - genKW)}.`);
-  else if (genKW < totalKW * 1.25) warn(`Generation is N-only (${fmt(genKW)} vs ${fmt(totalKW)}). One failed start = load shed. Target N+1 (${custom.genCount + 1} units).`);
-  else ok(`Generation ${fmt(genKW)} vs ${fmt(totalKW)} facility load — N+${Math.floor((genKW - totalKW) / (genOpt?.kw ?? 1))} redundancy.`);
+  // generation — count what the yard actually drew
+  const genCount = built.genCount ?? cfg.yard.gensets?.count ?? 0;
+  const genUnit = kw(cfg.yard.gensets?.id) || 3000;
+  const genKW = built.genKW ?? genCount * genUnit;
+  if (genKW === 0) warn('No standby generation — the site rides only on stored energy. Fine for a lab, fatal for production SLAs.');
+  else if (genKW < totalKW) bad(`Generators cover ${fmt(genKW)} (${genCount} units) but total facility load is ${fmt(totalKW)} — on grid loss you must shed ${fmt(totalKW - genKW)}.`);
+  else if (genKW < totalKW * 1.25) warn(`Generation is N-only (${fmt(genKW)}, ${genCount} units, vs ${fmt(totalKW)}). One failed start = load shed. Target N+1 (${genCount + 1} units).`);
+  else ok(`Generation ${fmt(genKW)} (${genCount} units) vs ${fmt(totalKW)} facility load — N+${Math.floor((genKW - totalKW) / genUnit)} redundancy.`);
 
   // fuel runtime
   if (genKW > 0) {
-    if (custom.fuel === 0) bad('Gensets have no bulk fuel tanks — only base-tank hours. 48–72 h on-site fuel is the standard for Tier III+.');
+    const fuelTanks = cfg.yard.fuel ?? 0;
+    if (fuelTanks === 0) bad('Gensets have no bulk fuel tanks — only base-tank hours. 48–72 h on-site fuel is the standard for Tier III+.');
     else {
-      const gallons = custom.fuel * 20000;
+      const gallons = fuelTanks * 20000;
       const burnGalPerHr = (totalKW / 1000) * 70; // ~70 gal/hr per MW at load
       const hours = gallons / Math.max(1, burnGalPerHr);
       if (hours < 24) warn(`Fuel runtime ≈ ${hours.toFixed(0)} h at full load — below the 48 h Tier benchmark. Add tanks or a refuel contract.`);
-      else ok(`Fuel runtime ≈ ${hours.toFixed(0)} h at full facility load (${custom.fuel} × 20,000 gal).`);
+      else ok(`Fuel runtime ≈ ${hours.toFixed(0)} h at full facility load (${fuelTanks} × 20,000 gal).`);
     }
   }
 
-  // transformers
-  const tfKW = custom.transformers * 2500; // 2.5 MVA units
+  // transformers — as drawn in the yard
+  const tfCount = cfg.yard.transformers ?? 0;
+  const tfKW = tfCount * 2500; // 2.5 MVA units
   if (tfKW < totalKW) bad(`Transformer capacity ${fmt(tfKW)} < facility load ${fmt(totalKW)} — the utility feed is the bottleneck. Add units.`);
   else if (tfKW < totalKW * 1.3) warn(`Transformers at ${Math.round(totalKW / tfKW * 100)}% — no spare unit for maintenance.`);
-  else ok(`Transformer capacity ${fmt(tfKW)} vs ${fmt(totalKW)} — healthy margin.`);
+  else ok(`Transformer capacity ${fmt(tfKW)} (${tfCount} × 2.5 MVA) vs ${fmt(totalKW)} — healthy margin.`);
 
   // topology details
-  if (!custom.ats && genKW > 0) bad('Generators exist but there is no ATS — nothing transfers the load to them automatically.');
-  if (!custom.busB) warn('Single-corded distribution (no B-feed busway): any busway maintenance is a full row outage. Concurrent maintainability requires A+B.');
-  if (!custom.containment && cfg.cooling === 'air') warn('No aisle containment: hot and cold air mix freely, costing roughly 10–20% extra cooling energy.');
-  if (cfg.cooling === 'air' && custom.crahCount < Math.ceil(itKW / 146) ) warn(`CRAH count is light: ${custom.crahCount} × ~146 kW handles ~${fmt(custom.crahCount * 146)} of air-side load.`);
-  if (custom.floors > 1) ok(`${custom.floors}-floor white space: land-efficient, but structural loading (${custom.rack === 'RCK-004' || custom.rack === 'RCK-005' ? '~1,360 kg per NVL72 rack' : 'rack point loads'}) and riser design become the constraints.`);
+  if (grayCount('ELC-010') === 0 && genKW > 0) bad('Generators exist but there is no ATS — nothing transfers the load to them automatically.');
+  if (cfg.include?.busB === false) warn('Single-corded distribution (no B-feed busway): any busway maintenance is a full row outage. Concurrent maintainability requires A+B.');
+  if (cfg.include?.containment === false && cfg.cooling === 'air') warn('No aisle containment: hot and cold air mix freely, costing roughly 10–20% extra cooling energy.');
+  const crahDrawn = cfg.crahCount ?? 0;
+  if (cfg.cooling === 'air' && crahDrawn < Math.ceil(itKW / 146)) warn(`CRAH count is light: ${crahDrawn} × ~146 kW handles ~${fmt(crahDrawn * 146)} of air-side load vs ${fmt(itKW)} IT.`);
+  if ((cfg.floors ?? 1) > 1) ok(`${cfg.floors}-floor white space: land-efficient, but structural loading and riser design become the constraints.`);
 
   const score = f.filter(x => x.level === 'bad').length === 0 ? (f.filter(x => x.level === 'warn').length <= 2 ? 'SOUND' : 'WORKABLE') : 'BLOCKED';
   return { findings: f, score, itKW, totalKW, pue };
