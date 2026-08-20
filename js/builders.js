@@ -2,8 +2,8 @@
 // Every builder returns a THREE.Group whose base sits at y=0, centered on its
 // footprint, front facing +Z. Groups carry userData.componentId for the inspector.
 import * as THREE from 'three';
-import { comp, dims, STD, MM, partsFor } from './catalog.js?b45';
-import { mats, blinkMats } from './materials.js?b45';
+import { comp, dims, STD, MM, partsFor } from './catalog.js?b47';
+import { mats, blinkMats } from './materials.js?b47';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 BOX.userData.shared = true; // never disposed on scene teardown

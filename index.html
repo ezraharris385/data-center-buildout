@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Data Center Buildout — 3D Operations Studio</title>
-<link rel="stylesheet" href="css/style.css?b45">
+<link rel="stylesheet" href="css/style.css?b47">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏭</text></svg>">
@@ -33,7 +33,7 @@
     <span class="brand-mark">▣</span>
     <span class="brand-name">DATA CENTER BUILDOUT</span>
     <span class="brand-tag">3D Operations Studio</span>
-    <span class="build-tag" id="buildTag">build 45</span>
+    <span class="build-tag" id="buildTag">build 47</span>
   </div>
   <nav id="tabs">
     <button class="tab active" data-scene="hyperscale">Hyperscale</button>
@@ -185,11 +185,25 @@
 <div id="mapOverlay" class="hidden">
   <div class="map-card">
     <button class="modal-close" id="mapClose">✕</button>
-    <h2>Site plan — on the ground</h2>
+    <div class="map-head">
+      <div id="mapTitle" class="map-title-block"></div>
+      <button id="mapResetTop" class="map-reset">↺ Reset layout</button>
+    </div>
     <div id="mapNote" class="map-note"></div>
-    <div id="siteMap"></div>
-    <div id="mapLegend" class="map-legend"></div>
+    <div class="map-body">
+      <div class="map-canvas-wrap">
+        <div id="siteMap"></div>
+        <div class="north-arrow"><svg viewBox="0 0 40 52"><polygon points="20,2 28,34 20,27 12,34" fill="#f2f7fc"/><text x="20" y="49" text-anchor="middle" font-size="13" font-weight="700" fill="#f2f7fc">N</text></svg></div>
+      </div>
+      <div id="mapSide" class="map-side">
+        <div class="side-head">EQUIPMENT SCHEDULE</div>
+        <div id="mapSchedule"></div>
+        <div class="side-head">LEGEND</div>
+        <div id="mapLegend" class="map-legend"></div>
+      </div>
+    </div>
   </div>
+
 </div>
 
 <!-- Database view -->
@@ -248,6 +262,6 @@
 
 <canvas id="scene3d"></canvas>
 
-<script type="module" src="js/main.js?b45"></script>
+<script type="module" src="js/main.js?b47"></script>
 </body>
 </html>

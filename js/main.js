@@ -7,18 +7,18 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp } from './catalog.js?b45';
-import { animateBlink } from './materials.js?b45';
-import { FlowSystem } from './flows.js?b45';
-import { buildFacility } from './facility.js?b45';
-import { SCENES } from './scenes.js?b45';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b45';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b45';
-import { initDatabase, setDatabaseVisible } from './database.js?b45';
-import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b45';
-import { initAgent } from './agent.js?b45';
-import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b45';
-import * as UI from './ui.js?b45';
+import { loadCatalog, comp } from './catalog.js?b47';
+import { animateBlink } from './materials.js?b47';
+import { FlowSystem } from './flows.js?b47';
+import { buildFacility } from './facility.js?b47';
+import { SCENES } from './scenes.js?b47';
+import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b47';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b47';
+import { initDatabase, setDatabaseVisible } from './database.js?b47';
+import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b47';
+import { initAgent } from './agent.js?b47';
+import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b47';
+import * as UI from './ui.js?b47';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
@@ -630,13 +630,13 @@ setTimeout(() => {
     onPlace: (key, x, z) => {
       setPlacement(custom.site, key, x, z);
       rebuildCustom();
-      refreshSiteMap(facility);
+      refreshSiteMap(facility, state.cfg);
       updateTelemetry();
     },
     onReset: () => {
       clearPlacement(custom.site);
       rebuildCustom();
-      refreshSiteMap(facility);
+      refreshSiteMap(facility, state.cfg);
     },
   };
   window.__place = mapHandlers.onPlace;   // test hook

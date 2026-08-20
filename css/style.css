@@ -335,3 +335,42 @@ body.tour-mode #hintbar, body.tour-mode #flowCard { display: none !important; }
 .drag-dot { background: rgba(255,255,255,.9); border: 3px dotted #0a0e14; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,.8); cursor: grab; }
 .map-reset { margin-left: 10px; border: 1px solid var(--panel-border); background: rgba(255,255,255,.05); color: var(--amber); font: 600 11px var(--sans); padding: 3px 10px; border-radius: 6px; cursor: pointer; }
 #plantSection select { width: 100%; margin-bottom: 6px; background: rgba(255,255,255,.05); border: 1px solid var(--panel-border); color: var(--ink); border-radius: 7px; padding: 6px 10px; font: 500 12px var(--sans); }
+
+/* ---------- site plan sheet ---------- */
+.map-card { width: min(1180px, 96vw); }
+.map-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 8px; }
+.map-title-block { flex: 1; }
+.tb-name { font-size: 16px; font-weight: 800; letter-spacing: .01em; }
+.tb-chip { font: 600 11px var(--mono); color: var(--accent); margin-left: 8px; }
+.tb-addr { font: 400 11px var(--mono); color: var(--ink-dim); margin: 2px 0 6px; }
+.tb-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-dim); }
+.tb-stats b { color: var(--ink); font-family: var(--mono); font-size: 12.5px; }
+.tb-warn { color: var(--hot); font-weight: 700; }
+.tb-ok { color: var(--ok); font-weight: 700; }
+.tb-dim { color: rgba(125,142,163,.7); font-style: italic; }
+.map-body { display: flex; gap: 14px; }
+.map-canvas-wrap { position: relative; flex: 1; }
+#siteMap { width: 100%; height: min(58vh, 600px); border-radius: 10px; background: #0a0e14; }
+.north-arrow { position: absolute; top: 12px; left: 60px; width: 26px; opacity: .85; z-index: 500; filter: drop-shadow(0 1px 3px rgba(0,0,0,.9)); pointer-events: none; }
+.map-side { width: 320px; max-height: min(58vh, 600px); overflow-y: auto; border-left: 1px solid rgba(255,255,255,.07); padding-left: 14px; }
+.side-head { font: 700 10px var(--mono); letter-spacing: .2em; color: var(--accent); margin: 4px 0 8px; }
+table.sched { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.sched th { text-align: left; font: 700 9.5px var(--mono); letter-spacing: .1em; color: var(--ink-dim); border-bottom: 1px solid var(--panel-border); padding: 4px 6px; }
+table.sched td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,.04); }
+table.sched tr[data-cat] { cursor: default; }
+table.sched tr[data-cat]:hover { background: rgba(57,194,255,.08); }
+table.sched tr.off td { color: var(--hot); }
+table.sched td i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+table.sched .num { text-align: right; font-family: var(--mono); }
+table.sched tr.models td { font: 400 9.5px var(--mono); color: rgba(125,142,163,.75); padding: 0 6px 6px 21px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.sched-note { font-size: 10px; color: var(--ink-dim); line-height: 1.5; margin: 8px 0 12px; }
+.map-toggles { background: rgba(10,14,20,.92); border: 1px solid var(--panel-border); border-radius: 8px; padding: 7px 10px; font-size: 11px; color: var(--ink); display: grid; gap: 3px; }
+.map-toggles label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.zone-tip { background: rgba(10,14,20,.8) !important; border: none !important; box-shadow: none !important; color: #7fd4ff !important; font: 700 10px var(--mono) !important; letter-spacing: .12em; }
+.zone-tip::before { display: none !important; }
+.leaflet-control-scale-line { background: rgba(10,14,20,.75) !important; color: var(--ink) !important; border-color: rgba(255,255,255,.4) !important; font: 600 10px var(--mono) !important; }
+.lg-row { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--ink); padding: 3px 0; }
+.lg-row i.ln { display: inline-block; width: 18px; border-top: 2px solid; flex-shrink: 0; }
+.lg-row i.ln.dash { border-top-style: dashed; }
+.lg-row i.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 2px dotted #0a0e14; flex-shrink: 0; }
+.lg-note { font-size: 9.5px; color: rgba(125,142,163,.7); line-height: 1.55; margin-top: 8px; }
