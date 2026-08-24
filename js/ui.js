@@ -1,5 +1,5 @@
 // ui.js — panels, inspector, telemetry, toggles.
-import { comp } from './catalog.js?b49';
+import { comp } from './catalog.js?b50';
 
 const $ = id => document.getElementById(id);
 

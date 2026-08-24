@@ -20,6 +20,8 @@ export class Choreographer {
       target: k.target.isVector3 ? k.target.clone() : new THREE.Vector3(...k.target),
       dur: k.dur ?? 4,
       caption: k.caption ?? null,
+      capDur: k.capDur ?? null,
+      action: k.action ?? null,
     }));
     this.onCaption = onCaption;
     this.onDone = onDone;
@@ -32,7 +34,8 @@ export class Choreographer {
     this.controls.update();
     this.camera.updateMatrixWorld();
     // key 0's caption displays while traveling toward key 1
-    if (this._keys[0].caption) this.onCaption?.(this._keys[0].caption, this._keys[1]?.dur ?? 4);
+    if (this._keys[0].caption) this.onCaption?.(this._keys[0].caption, this._keys[0].capDur ?? this._keys[1]?.dur ?? 4);
+    if (this._keys[0].action) { try { this._keys[0].action(); } catch (e) { console.warn('tour action failed', e); } }
     this.segStartPos = this._keys[0].pos.clone();
     this.segStartTgt = this._keys[0].target.clone();
     this.seg = 1;
@@ -69,7 +72,8 @@ export class Choreographer {
       this.t = 0;
       if (this.seg >= this._keys.length) { this._finish(); return; }
       const next = this._keys[this.seg];
-      if (next.caption) this.onCaption?.(next.caption, next.dur);
+      if (next.caption) this.onCaption?.(next.caption, next.capDur ?? next.dur);
+      if (next.action) { try { next.action(); } catch (e) { console.warn('tour action failed', e); } }
     }
   }
 }
@@ -191,11 +195,124 @@ export function commercialKeys(facility, cfg) {
   ];
 }
 
+/* ================= Trailer cut (~29 s) =================
+   Audience: a senior real-estate professional who is NOT a data center
+   specialist. So the beats are asset-first — a real building, a real
+   constraint, a decision — and the captions carry no silicon jargon.
+   Runs on the Lehigh site build, where the fit-out program exists. */
+export function trailerKeys(facility, cfg, hooks = {}) {
+  const a = facility.anchors;
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const f = a.fitout;
+  const prog = f?.program;
+  const sf = n => (n ?? 0).toLocaleString();
+  const mw = (facility.stats.itKW / 1000).toFixed(1);
+  const ft = m => Math.round(m / 0.3048);
+
+  // Framing helper: put the camera far enough along `dir` that a sphere of
+  // radius r around `center` fills the vertical FOV. Guessing distances against
+  // a 78 x 157 m hall produced shots that were 60% empty sky, so every beat
+  // below states the subject it must fill instead.
+  const FOV = (cfg._fov ?? 50) * Math.PI / 180;
+  const shot = (center, r, dir, pad = 1.12) => {
+    const d = (r * pad) / Math.tan(FOV / 2);
+    return center.clone().add(dir.clone().normalize().multiplyScalar(d));
+  };
+
+  const bldgC = V(0, 3, (a.hallD - a.grayD) / 2);          // shell centre
+  const bldgR = (a.hallD + a.grayD) / 2;                    // half depth dominates
+  const yardC = V(0, 2, -a.grayD - a.yardD / 2);
+  const pod = f?.pod ?? a.hallCenter;
+  const podR = Math.max((f?.podW ?? 24), (f?.podD ?? 16)) / 2;
+  const roomsC = V(0, 1.5, ((f?.podZ0 ?? 4) + (f?.shellZ0 ?? 38)) / 2);
+  const roomsR = Math.max(a.hallW / 2, ((f?.shellZ0 ?? 38) - (f?.podZ0 ?? 4)) / 2);
+  const hallC = V(0, 1, ((f?.podZ0 ?? 4) + a.hallD) / 2);
+  const hallR = (a.hallD - (f?.podZ0 ?? 4)) / 2;
+  const siteC = V(0, 1, (a.hallD - a.grayD - a.yardD) / 2);
+  const siteR = (a.hallD + a.grayD + a.yardD) / 2;
+
+  return [
+    { // 1 — cold open: LOW angle along the facade, roof on. Any elevated angle on
+      // a 167 m x 5.4 m box turns the roof into a blown-out plane filling the
+      // frame, so the establishing shot stays near grade like a building photo.
+      pos: shot(bldgC, bldgR * 0.72, V(0.66, 0.115, 0.74)),
+      target: V(0, 4, bldgC.z),
+      dur: 0.01,
+      action: () => { hooks.setLabels?.(false); hooks.setRoof?.(true); },
+      caption: { kicker: cfg.siteOverrides?.siteName ? 'NILES, ILLINOIS' : 'THE SITE',
+                 title: `A ${cfg.siteOverrides?.grossSF ? Math.round(cfg.siteOverrides.grossSF / 1000) + ',000' : '139,000'} SF industrial shell.`,
+                 sub: 'The client question: can it carry 30 megawatts?' },
+    },
+    { // 2 — descend across the yard: what 30 MW physically requires outdoors
+      pos: shot(yardC, a.yardD / 2, V(0.44, 0.52, 0.73)),
+      target: yardC.clone(),
+      dur: 5.0,
+      caption: { kicker: 'MEASURED, NOT SKETCHED', title: 'Modeled from the real parcel.',
+                 sub: `${ft(a.hallW)} × ${ft(a.hallD + a.grayD)} ft footprint · surveyed boundary · catalog dimensions throughout` },
+    },
+    { // 3 — the reveal: roof comes off, tight on the white-space pod
+      pos: shot(pod, podR, V(0.38, 0.58, 0.72)),
+      target: pod.clone(),
+      dur: 4.6,
+      action: () => hooks.setRoof?.(false),
+      caption: { kicker: 'THE ANSWER', title: `${mw} MW fits in ${ft(f?.podW ?? 24)} × ${ft(f?.podD ?? 16)} feet.`,
+                 sub: `${facility.stats.racks} racks — the entire revenue-producing floor` },
+    },
+    { // 4 — pull out to the support rooms flanking and backing the pod
+      pos: shot(roomsC, roomsR, V(-0.46, 0.56, 0.69)),
+      target: roomsC.clone(),
+      dur: 4.6,
+      caption: { kicker: 'WHAT MOST PRO-FORMAS MISS', title: 'The rooms that serve it are 5× larger.',
+                 sub: prog ? `${sf(prog.areas.electricalGray + prog.areas.electricalInterior)} SF electrical · ${sf(prog.areas.mechanical)} SF mechanical`
+                           : 'Electrical and mechanical dominate the program' },
+    },
+    { // 5 — steep over the whole hall: fitted program against unfitted shell
+      pos: shot(hallC, hallR, V(0.22, 0.86, 0.46)),
+      target: hallC.clone(),
+      dur: 4.8,
+      caption: { kicker: 'THE REAL CONSTRAINT', title: 'This building binds on power, not space.',
+                 sub: prog ? `${prog.shellPct}% stays shell — ${sf(prog.areas.shell)} SF of quantified expansion optionality`
+                           : 'Unfitted shell carries the expansion case' },
+    },
+    { // 6a/b/c — one slow arc over the pod while the compute platform is swapped
+      pos: shot(pod, podR * 1.25, V(0.62, 0.52, 0.58)),
+      target: pod.clone(),
+      dur: 2.3,
+      capDur: 6.0,
+      action: () => hooks.setPlatform?.('h100'),
+      caption: { kicker: 'TWELVE COMPUTE PLATFORMS', title: 'Change the chip. The building re-plans itself.',
+                 sub: 'Racks, cooling, electrical, yard plant and capacity — all re-derived' },
+    },
+    {
+      pos: shot(pod, podR * 1.25, V(0.05, 0.60, 0.80)),
+      target: pod.clone(),
+      dur: 2.0,
+      action: () => hooks.setPlatform?.('kyber'),
+      caption: null,
+    },
+    {
+      pos: shot(pod, podR * 1.25, V(-0.55, 0.54, 0.64)),
+      target: pod.clone(),
+      dur: 2.0,
+      action: () => hooks.setPlatform?.('gb200'),
+      caption: null,
+    },
+    { // 7 — hero: the whole property, building + yard plant, as one machine
+      pos: shot(siteC, siteR * 0.74, V(0.54, 0.60, 0.59)),
+      target: siteC.clone(),
+      dur: 5.4,
+      caption: { kicker: 'DATA CENTER BUILDOUT — 3D OPERATIONS STUDIO', title: 'Any site. Any platform. Answered in minutes.',
+                 sub: 'Site-specific buildouts · chip-level capacity · investor-grade analysis' },
+    },
+  ];
+}
+
+
 /* ================= Recorder ================= */
 // Composites the WebGL canvas + cinematic titles onto a 2D canvas and records
 // it with MediaRecorder. Produces a downloadable .webm.
 export class TourRecorder {
-  constructor(glCanvas, { width = 1920, height = 1080, fps = 60, bitrate = 22_000_000 } = {}) {
+  constructor(glCanvas, { width = 1920, height = 1080, fps = 60, bitrate = 22_000_000, stream: useStream = true } = {}) {
     this.glCanvas = glCanvas;
     this.w = width; this.h = height;
     this.canvas = document.createElement('canvas');
@@ -206,6 +323,9 @@ export class TourRecorder {
     this.captionAge = 0;
     this.captionDur = 4;
     this.elapsed = 0;
+    // deterministic capture pulls frames off this.canvas itself; a MediaRecorder
+    // would time them by wall clock and stretch the cut whenever a frame is slow
+    if (!useStream) { this.recorder = null; this.chunks = []; this.done = Promise.resolve(null); return; }
     const stream = this.canvas.captureStream(fps);
     const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
     this.recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
@@ -214,7 +334,7 @@ export class TourRecorder {
     this.done = new Promise(res => { this.recorder.onstop = () => res(new Blob(this.chunks, { type: 'video/webm' })); });
   }
 
-  start() { this.recorder.start(); }
+  start() { this.recorder?.start(); }
 
   setCaption(cap, dur) { this.caption = cap; this.captionAge = 0; this.captionDur = dur ?? 4; }
 

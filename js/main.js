@@ -7,18 +7,18 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { loadCatalog, comp, kw } from './catalog.js?b49';
-import { animateBlink } from './materials.js?b49';
-import { FlowSystem } from './flows.js?b49';
-import { buildFacility } from './facility.js?b49';
-import { SCENES } from './scenes.js?b49';
-import { Choreographer, cinematicKeys, commercialKeys, TourRecorder } from './tour.js?b49';
-import { buildFlowStops, buildEquipmentGuide } from './learn.js?b49';
-import { initDatabase, setDatabaseVisible } from './database.js?b49';
-import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b49';
-import { initAgent } from './agent.js?b49';
-import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b49';
-import * as UI from './ui.js?b49';
+import { loadCatalog, comp, kw } from './catalog.js?b50';
+import { animateBlink } from './materials.js?b50';
+import { FlowSystem } from './flows.js?b50';
+import { buildFacility } from './facility.js?b50';
+import { SCENES } from './scenes.js?b50';
+import { Choreographer, cinematicKeys, commercialKeys, trailerKeys, TourRecorder } from './tour.js?b50';
+import { buildFlowStops, buildEquipmentGuide } from './learn.js?b50';
+import { initDatabase, setDatabaseVisible } from './database.js?b50';
+import { customConfig, initBuilder, custom, setPlacement, clearPlacement } from './custom.js?b50';
+import { initAgent } from './agent.js?b50';
+import { openSiteMap, refreshSiteMap, closeSiteMap } from './sitemap.js?b50';
+import * as UI from './ui.js?b50';
 
 /* ---------------- renderer & scene ---------------- */
 const canvas = document.getElementById('scene3d');
@@ -219,10 +219,10 @@ function build3D(cfg) {
   flows.setLoad(state.load);
   // shell defaults apply only until the user touches the roof toggle themselves —
   // after that, their choice survives every rebuild/chip switch
-  if (roofAuto) {
+  if (roofAuto && !choreo.active) {
     toggles.roof = cfg.shell === 'open' ? false : !!cfg.building;
     document.getElementById('tglRoof').checked = toggles.roof;
-  } else if (cfg.shell === 'open') {
+  } else if (cfg.shell === 'open' && !choreo.active) {
     toggles.roof = false;
     document.getElementById('tglRoof').checked = false;
   }
@@ -240,7 +240,7 @@ function build3D(cfg) {
   // facility — per-floor rack distribution, instance map, stats.
   window.__fac = facility;
 
-  flyTo('overview', 0);
+  if (!choreo.active) flyTo('overview', 0);   // a scripted shot owns the camera
   updateTelemetry();
 }
 
@@ -555,7 +555,7 @@ guideOverlay.addEventListener('click', e => {
 });
 
 /* ---------------- cinematic tour + recording ---------------- */
-function startCinematic({ record = false, w = 1920, h = 1080, fps = 60, mode = 'cine' } = {}) {
+function startCinematic({ record = false, w = 1920, h = 1080, fps = 60, mode = 'cine', deterministic = false } = {}) {
   if (!facility) return;
   document.body.classList.add('tour-mode');
   exitFlow(true);
@@ -564,17 +564,53 @@ function startCinematic({ record = false, w = 1920, h = 1080, fps = 60, mode = '
   flows.setAirVisible(true); flows.setHeatVisible(true);
 
   if (record) {
-    recorder = new TourRecorder(canvas, { width: w, height: h, fps });
+    recorder = new TourRecorder(canvas, { width: w, height: h, fps, stream: !deterministic });
     vw = w; vh = h;
     renderer.setSize(w, h, false);          // drawing buffer at video res; CSS keeps it fullscreen
     renderer.setPixelRatio(1);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     composer.setSize(w, h);
+    renderer.toneMappingExposure = 1.45;
+    // roof is light TPO gray; at recording exposure it clips to white and the
+    // establishing shots become a blank plane. Stash and darken for the cut.
+    for (const m of facility.layers.roof) {
+      const mat = m.material;
+      if (mat && mat.color && !mat._cineStash) {
+        mat._cineStash = mat.color.getHex();
+        mat.color.setHex(mat._cineStash === 0x878e96 ? 0x30353d : mat._cineStash);
+      }
+    }
     recorder.start();
   }
 
-  const keys = mode === 'promo' ? commercialKeys(facility, state.cfg) : cinematicKeys(facility, state.cfg);
+  // trailer: swap the compute platform on a choreography beat. Rebuilding replaces
+  // the facility, so the tour's anchors are captured up front and reused.
+  const setLabels = (on) => {
+    toggles.labels = on;
+    const el = document.getElementById('tglLabels');
+    if (el) el.checked = on;
+    applyToggles();
+  };
+  const setRoof = (on) => {
+    roofAuto = false;
+    toggles.roof = on;
+    const el = document.getElementById('tglRoof');
+    if (el) el.checked = on;
+    applyToggles();
+  };
+  const setPlatform = (key) => {
+    const sel = document.getElementById('bldChip');
+    if (!sel || sel.value === key) return;
+    sel.value = key;
+    sel.dispatchEvent(new Event('input', { bubbles: true }));
+    if (recorder) { flows.setPowerVisible(true); flows.setCoolantVisible(true);
+                    flows.setAirVisible(true); flows.setHeatVisible(true); }
+  };
+
+  const keys = mode === 'promo' ? commercialKeys(facility, state.cfg)
+    : mode === 'trailer' ? trailerKeys(facility, { ...state.cfg, _fov: camera.fov }, { setPlatform, setRoof, setLabels })
+    : cinematicKeys(facility, state.cfg);
   if (mode === 'promo') {
     // scripted grid-failure beat: hits as the camera rises toward the gensets
     setTimeout(() => { if (state.utilityOn) failUtility(); }, 11800);
@@ -585,7 +621,7 @@ function startCinematic({ record = false, w = 1920, h = 1080, fps = 60, mode = '
       if (recorder) {
         // hold the final frame briefly, then finish
         setTimeout(async () => {
-          await recorder.stop('dc-buildout-tour.webm');
+          await recorder.stop(mode === 'trailer' ? 'dc-buildout-trailer.webm' : 'dc-buildout-tour.webm');
           recorder = null;
           document.body.classList.remove('tour-mode');
           document.title = 'TOUR-DONE — Data Center Buildout';
@@ -597,6 +633,36 @@ function startCinematic({ record = false, w = 1920, h = 1080, fps = 60, mode = '
   });
 }
 window.__tour = opts => startCinematic(opts ?? {});
+
+/* Deterministic capture: advance exactly 1/fps of scripted time per frame and
+   hand the composed frame back, so the cut's duration and pacing are exact no
+   matter how long each frame actually takes to render. */
+window.__cine = {
+  fps: 60,
+  start(mode = 'trailer', w = 1920, h = 1080, fps = 30) {
+    this.fps = fps;
+    this._done = false;
+    detTime = 0;
+    // the live loop must stop: otherwise rAF advances the choreographer too and
+    // the cut burns its scripted time in a fraction of the frames
+    loopPaused = true;
+    startCinematic({ record: true, w, h, fps, mode, deterministic: true });
+    choreo.onDone = () => { this._done = true; };
+    return { keys: choreo._keys?.length ?? 0, fps };
+  },
+  tick(n = 1) { for (let i = 0; i < n && !this._done; i++) step(1 / this.fps); return this._done; },
+  frame(q = 0.94) { return recorder ? recorder.canvas.toDataURL('image/jpeg', q) : null; },
+  done() { return !!this._done; },
+  finish() {
+    recorder = null; loopPaused = false;
+    renderer.toneMappingExposure = 1.35;
+    if (facility) for (const m of facility.layers.roof) {
+      const mat = m.material;
+      if (mat && mat._cineStash !== undefined) { mat.color.setHex(mat._cineStash); delete mat._cineStash; }
+    }
+    document.body.classList.remove('tour-mode');
+  },
+};
 
 /* ---------------- UI wiring ---------------- */
 UI.initUI({
@@ -639,9 +705,11 @@ function runDemo() {
 /* ---------------- render loop ---------------- */
 const clock = new THREE.Clock();
 let rafAlive = false;
-function step() {
-  const dt = Math.min(clock.getDelta(), 0.05);
-  const t = clock.elapsedTime;
+let detTime = 0;                       // accumulated scripted time in fixed-step mode
+function step(dtFixed) {
+  const dt = dtFixed ?? Math.min(clock.getDelta(), 0.05);
+  if (dtFixed) detTime += dtFixed; else detTime = clock.elapsedTime;
+  const t = detTime;
   animateBlink(t);
   flows?.update(dt, t);
   if (choreo.active) choreo.update(dt);
@@ -655,17 +723,18 @@ function step() {
   else composer.render();
   if (recorder) recorder.compose(dt);
 }
+let loopPaused = false;   // deterministic capture drives step() itself
 function animate() {
   rafAlive = true;
   requestAnimationFrame(animate);
-  step();
+  if (!loopPaused) step();
 }
 window.__render = (n = 1) => { for (let i = 0; i < n; i++) step(); return 'rendered ' + n; };
 window.__dbg = { renderer, scene, camera, composer, THREE };   // capture/verification hooks
 setTimeout(() => {
   if (!rafAlive) {
     console.warn('rAF suspended — falling back to timer loop');
-    setInterval(step, 33);
+    setInterval(() => { if (!loopPaused) step(); }, 33);
   }
 }, 600);
 
@@ -710,13 +779,29 @@ setTimeout(() => {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.scene === startScene));
   switchTab(startScene);
 
+  // ?site=lehigh&chip=gb200 — makes a specific site build directly addressable
+  // (needed for scripted tours, and handy for sharing an exact configuration)
+  if (startScene === 'custom') {
+    const wantSite = params.get('site'), wantChip = params.get('chip');
+    let changed = false;
+    const siteSel = document.getElementById('bldSite');
+    if (wantSite && siteSel && [...siteSel.options].some(o => o.value === wantSite)) {
+      siteSel.value = wantSite; custom.site = wantSite; changed = true;
+    }
+    const chipSel = document.getElementById('bldChip');
+    if (wantChip && chipSel && [...chipSel.options].some(o => o.value === wantChip)) {
+      chipSel.value = wantChip; custom.chip = wantChip; changed = true;
+    }
+    if (changed) rebuildCustom();
+  }
+
   UI.setLoadProgress(100, 'Ready');
   setTimeout(UI.hideLoading, 350);
   animate();
 
   if (params.get('demo') === '1') setTimeout(runDemo, 400);
   const tourMode = params.get('tour');
-  if (tourMode === 'cine' || tourMode === 'promo') {
+  if (tourMode === 'cine' || tourMode === 'promo' || tourMode === 'trailer') {
     const record = params.get('record') === '1';
     const fps = +(params.get('fps') ?? 60);
     // small delay so fonts/first frames settle

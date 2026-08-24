@@ -7,9 +7,9 @@
 //   Equipment yard:                 z ∈ [-grayD - yardD, -grayD]
 // Multi-floor: white space repeats on each level at y = floor * floorH.
 import * as THREE from 'three';
-import { STD, dims, comp, kw } from './catalog.js?b49';
-import { mats, blinkMats } from './materials.js?b49';
-import * as B from './builders.js?b49';
+import { STD, dims, comp, kw } from './catalog.js?b50';
+import { mats, blinkMats } from './materials.js?b50';
+import * as B from './builders.js?b50';
 
 /* ---------- canvas label sprite ---------- */
 function makeLabel(text, { size = 44, color = '#9fc9e8', sub = null } = {}) {
@@ -784,6 +784,19 @@ export function buildFacility(scene, cfg, flows) {
     hallW, hallD, grayD, yardD, wallH, floorH, floors,
     hallCenter: new THREE.Vector3(0, 1, hallD / 2),
     liquid,
+    // fit-out anchors so the tour can frame the pod and each program room exactly
+    fitout: fit ? {
+      pod: new THREE.Vector3(0, 1.2, fit.pod.z0 + fit.pod.d / 2),
+      podW: fit.pod.w, podD: fit.pod.d, podZ0: fit.pod.z0,
+      rooms: fit.rooms.map(r => ({
+        key: r.key, label: r.label,
+        center: new THREE.Vector3(r.x0 + r.w / 2, 1.2, r.z0 + r.d / 2),
+        w: r.w, d: r.d,
+      })),
+      shellZ0: fit.shellZ0,
+      shellCenter: new THREE.Vector3(0, 1, (fit.shellZ0 + hallD) / 2),
+      program: fit.program,
+    } : null,
   };
 
   /* ---------------- camera presets ---------------- */
